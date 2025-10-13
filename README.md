@@ -40,7 +40,3 @@ new_offset = external_sensor_temperature - (valve_temperature - current_offset)
 ```
 
 The result is rounded to the configured step (for example, every 0.5 °C) and stored in the offset entity. The automation waits for the specified interval before attempting the next update to limit the number of write operations.
-
-## 🧪 Testing
-
-The blueprint was created from a working user configuration and does not add extra safety checks or hysteresis—its behaviour matches previously shared YAML automations.
