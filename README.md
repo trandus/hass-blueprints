@@ -25,7 +25,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 
 | Blueprint | Version | File | Description |
 | --- | --- | --- | --- |
-| Valve temperature offset calibration | 0.2.0 | `blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml` | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
+| Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📥 Installing blueprints in Home Assistant
 
