@@ -1,16 +1,14 @@
 # 🧠 Home Assistant – Valve Temperature Offset Blueprint
 
-Prosty blueprint automatyzacji Home Assistant, który na podstawie pomiaru zewnętrznego czujnika temperatury aktualizuje offset
-(czyli kalibrację) w wybranej głowicy termostatycznej (`climate`). Dzięki temu wskazania termostatu lepiej odzwierciedlają
-rzeczywistą temperaturę w pomieszczeniu.
+A simple Home Assistant automation blueprint that updates the calibration (offset) of a selected thermostatic valve (`climate` entity) based on the reading from an external temperature sensor. By continuously aligning the valve's measurement with the actual room temperature, your thermostat reflects real conditions more accurately.
 
-## 🚀 Funkcje
+## 🚀 Features
 
-- automatyczna kalkulacja wartości offsetu na podstawie różnicy między czujnikiem zewnętrznym i wbudowanym w głowicy,
-- zapis obliczonego offsetu do encji `number` (`*_local_temperature_offset*`) powiązanej z urządzeniem,
-- prosta blokada czasowa, aby ograniczyć liczbę zapisów (domyślnie co najmniej co 5 minut).
+- automatically calculates the offset value from the difference between the external sensor and the valve's built-in sensor,
+- writes the calculated offset to the corresponding `number` entity (`*_local_temperature_offset`) of the device,
+- includes a basic time lock to limit how often the value is updated (minimum every 5 minutes by default).
 
-## 📁 Struktura repozytorium
+## 📁 Repository structure
 
 ```
 blueprints/
@@ -19,32 +17,30 @@ blueprints/
         └── auto_offset_calibration.yaml
 ```
 
-Skopiuj katalog `blueprints/automation` do folderu `config/blueprints/automation` w instalacji Home Assistant, a następnie
-ponownie wczytaj blueprints w interfejsie (`Ustawienia` → `Automatyzacje i sceny` → menu z trzema kropkami → `Załaduj ponownie blueprinty`).
+Copy the `blueprints/automation` directory to the `config/blueprints/automation` folder in your Home Assistant installation, then reload blueprints in the UI (`Settings` → `Automations & Scenes` → three-dot menu → `Reload Blueprints`).
 
-## 🔧 Konfiguracja blueprintu
+## 🔧 Blueprint configuration
 
-Blueprint wymaga trzech parametrów:
+The blueprint requires the following inputs:
 
-1. **Głowica termostatyczna** – encja `climate`, której offset ma być aktualizowany.
-2. **Zewnętrzny czujnik temperatury** – encja `sensor` (najlepiej z klasą urządzenia `temperature`).
-3. **Minimalny odstęp pomiędzy aktualizacjami** – wartość w sekundach (domyślnie 300 s).
+1. **Thermostatic valve** – select the `climate` entity that represents the valve you want to calibrate. You can find it under `Settings` → `Devices & Services`, open the device for your valve, and copy the entity ID displayed next to the climate entity (for example, `climate.living_room_valve`).
+2. **External temperature sensor** – choose a `sensor` entity that reports the actual room temperature. Look it up on the `Settings` → `Devices & Services` page or via the `Settings` → `Devices` list, then copy the entity ID (for example, `sensor.living_room_temperature`). Make sure the sensor updates regularly and uses the `temperature` device class.
+3. **Minimum interval between updates** – set the number of seconds that must pass before a new offset can be written (defaults to 300 seconds). This prevents rapid changes that could spam the device. If you are unsure, keep the default value or increase it if your device reacts slowly to adjustments.
+4. **Offset entity** – select the `number` entity that stores the offset value for the valve. On the valve's device page, look for an entity with a name similar to `Local temperature offset`. If there are multiple offset entities, choose the one linked to the climate entity you are calibrating. You can confirm the entity ID (for example, `number.living_room_valve_local_temperature_offset`) in the `Developer Tools` → `States` view.
+5. **Rounding step** – define the increment that the calculated offset should be rounded to (default `1.0`). Open the offset entity in the UI and check the `Step` attribute to see what increments the device supports. Many valves only allow full degrees (`1.0`), while others support finer steps such as `0.5` or `0.1`. Enter the same value here to avoid rejected updates.
 
-> **Uwaga:** blueprint automatycznie wyszukuje encję `number` z fragmentem nazwy `local_temperature_offset` powiązaną z wybranym urządzeniem.
-> Jeśli Twoje urządzenie używa niestandardowej encji, upewnij się, że znajduje się ona w tym samym urządzeniu co encja `climate`.
+> **Tip:** After saving the automation, you can monitor the offset entity in `Developer Tools` → `States` to verify that the value is being updated according to the configured interval and step.
 
-## ℹ️ Jak to działa?
+## ℹ️ How it works
 
-Automatyzacja wykonuje proste obliczenie:
+The automation performs a straightforward calculation:
 
 ```
-nowy_offset = temperatura_z_czujnika_zewnętrznego - (temperatura_z_glowicy - aktualny_offset)
+new_offset = external_sensor_temperature - (valve_temperature - current_offset)
 ```
 
-Otrzymany wynik jest zaokrąglany do pełnych stopni i zapisywany w encji offsetu. Zapis odbywa się nie częściej niż co określony
-interwał czasowy, aby ograniczyć liczbę operacji na urządzeniu.
+The result is rounded to the configured step (for example, every 0.5 °C) and stored in the offset entity. The automation waits for the specified interval before attempting the next update to limit the number of write operations.
 
-## 🧪 Testowanie
+## 🧪 Testing
 
-Blueprint został zbudowany na podstawie działającej konfiguracji użytkownika i nie zawiera dodatkowych zabezpieczeń ani
-histerezy – jego działanie odpowiada udostępnionym wcześniej automatyzacjom w YAML.
+The blueprint was created from a working user configuration and does not add extra safety checks or hysteresis—its behaviour matches previously shared YAML automations.
