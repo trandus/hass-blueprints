@@ -1,0 +1,82 @@
+blueprint:
+  name: Valve Temperature Offset Calibration
+  description: |
+    Automatycznie kalibruj offset temperatury głowicy termostatycznej na podstawie wskazań zewnętrznego czujnika.
+    Blueprint oblicza nową wartość offsetu i zapisuje ją w encji typu `number` powiązanej z wybraną głowicą.
+  domain: automation
+  source_url: https://github.com/USER/hass-valve-temp-calibration-blueprint/blob/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml
+  input:
+    climate_entity:
+      name: Głowica termostatyczna
+      description: Wybierz encję climate reprezentującą zawór lub głowicę termostatyczną.
+      selector:
+        entity:
+          domain: climate
+    external_sensor:
+      name: Zewnętrzny czujnik temperatury
+      description: Wybierz encję sensora dostarczającą rzeczywisty odczyt temperatury pomieszczenia.
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    min_interval:
+      name: Minimalny odstęp pomiędzy aktualizacjami
+      description: Minimalny czas (w sekundach), jaki musi upłynąć pomiędzy kolejnymi zapisami offsetu.
+      default: 300
+      selector:
+        number:
+          min: 0
+          max: 3600
+          step: 1
+          mode: box
+          unit_of_measurement: s
+
+mode: single
+max_exceeded: silent
+
+variables:
+  climate_entity: !input climate_entity
+  external_sensor: !input external_sensor
+  min_interval: !input min_interval
+  offset_entity: >
+    {% set device = device_id(climate_entity) %}
+    {% if device %}
+      {% set candidates = device_entities(device) | select('match', '^number\\..*_local_temperature_offset.*') | list %}
+      {{ candidates[0] if candidates|length > 0 else '' }}
+    {% else %}
+      ''
+    {% endif %}
+  current_offset: >
+    {% if offset_entity %}
+      {{ states(offset_entity) | float(0) }}
+    {% else %}
+      0
+    {% endif %}
+  current_temperature: >
+    {{ state_attr(climate_entity, 'current_temperature') | float(0) }}
+  external_temperature: >
+    {{ states(external_sensor) | float(0) }}
+  calculated_offset: >
+    {{ (external_temperature - (current_temperature - current_offset)) | round(0) | int }}
+
+trigger:
+  - platform: state
+    entity_id: !input external_sensor
+  - platform: state
+    entity_id: !input climate_entity
+    attribute: current_temperature
+
+condition:
+  - condition: template
+    value_template: "{{ offset_entity != '' }}"
+  - condition: template
+    value_template: >
+      {% set last = state_attr(this.entity_id, 'last_triggered') %}
+      {{ (as_timestamp(now()) - as_timestamp(last or 0)) > min_interval }}
+
+action:
+  - service: number.set_value
+    target:
+      entity_id: "{{ offset_entity }}"
+    data:
+      value: "{{ calculated_offset }}"

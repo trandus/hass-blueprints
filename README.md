@@ -1,22 +1,50 @@
-# 🧠 Home Assistant – Valve Temperature Calibration Blueprint
+# 🧠 Home Assistant – Valve Temperature Offset Blueprint
 
-Automatically calibrate the **temperature offset** of your smart radiator valve (TRV) using an external temperature sensor.  
-This blueprint keeps your thermostat’s readings accurate — even if the valve is located near a radiator, curtain, or in a warm corner.
+Prosty blueprint automatyzacji Home Assistant, który na podstawie pomiaru zewnętrznego czujnika temperatury aktualizuje offset
+(czyli kalibrację) w wybranej głowicy termostatycznej (`climate`). Dzięki temu wskazania termostatu lepiej odzwierciedlają
+rzeczywistą temperaturę w pomieszczeniu.
 
----
+## 🚀 Funkcje
 
-## 🌡️ Features
+- automatyczna kalkulacja wartości offsetu na podstawie różnicy między czujnikiem zewnętrznym i wbudowanym w głowicy,
+- zapis obliczonego offsetu do encji `number` (`*_local_temperature_offset*`) powiązanej z urządzeniem,
+- prosta blokada czasowa, aby ograniczyć liczbę zapisów (domyślnie co najmniej co 5 minut).
 
-- 🏠 Works with any **`climate` entity** (e.g. Zigbee, Hama, Tuya, Danfoss, Aqara, etc.)
-- 📏 Calculates the **true valve sensor temperature** (without offset)
-- 🔁 Automatically updates the **local temperature offset** entity (`number.xxx_local_temperature_offset`)
-- ⏱️ Built-in **time throttle** (prevents too frequent changes)
-- 🎚️ Supports **hysteresis** and **rounding** for stability
-- 🚫 Optional **min/max limits** for offset values
-- ⚙️ No coding required — configurable entirely via the Home Assistant UI
+## 📁 Struktura repozytorium
 
----
+```
+blueprints/
+└── automation/
+    └── valve_temperature_calibration/
+        └── auto_offset_calibration.yaml
+```
 
-## 📦 Installation
+Skopiuj katalog `blueprints/automation` do folderu `config/blueprints/automation` w instalacji Home Assistant, a następnie
+ponownie wczytaj blueprints w interfejsie (`Ustawienia` → `Automatyzacje i sceny` → menu z trzema kropkami → `Załaduj ponownie blueprinty`).
 
-1. Copy the blueprint file into your Home Assistant configuration:
+## 🔧 Konfiguracja blueprintu
+
+Blueprint wymaga trzech parametrów:
+
+1. **Głowica termostatyczna** – encja `climate`, której offset ma być aktualizowany.
+2. **Zewnętrzny czujnik temperatury** – encja `sensor` (najlepiej z klasą urządzenia `temperature`).
+3. **Minimalny odstęp pomiędzy aktualizacjami** – wartość w sekundach (domyślnie 300 s).
+
+> **Uwaga:** blueprint automatycznie wyszukuje encję `number` z fragmentem nazwy `local_temperature_offset` powiązaną z wybranym urządzeniem.
+> Jeśli Twoje urządzenie używa niestandardowej encji, upewnij się, że znajduje się ona w tym samym urządzeniu co encja `climate`.
+
+## ℹ️ Jak to działa?
+
+Automatyzacja wykonuje proste obliczenie:
+
+```
+nowy_offset = temperatura_z_czujnika_zewnętrznego - (temperatura_z_glowicy - aktualny_offset)
+```
+
+Otrzymany wynik jest zaokrąglany do pełnych stopni i zapisywany w encji offsetu. Zapis odbywa się nie częściej niż co określony
+interwał czasowy, aby ograniczyć liczbę operacji na urządzeniu.
+
+## 🧪 Testowanie
+
+Blueprint został zbudowany na podstawie działającej konfiguracji użytkownika i nie zawiera dodatkowych zabezpieczeń ani
+histerezy – jego działanie odpowiada udostępnionym wcześniej automatyzacjom w YAML.
