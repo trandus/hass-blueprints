@@ -1,27 +1,50 @@
 blueprint:
   name: Valve Temperature Offset Calibration
   description: |
-    Automatycznie kalibruj offset temperatury głowicy termostatycznej na podstawie wskazań zewnętrznego czujnika.
-    Blueprint oblicza nową wartość offsetu i zapisuje ją w encji typu `number` powiązanej z wybraną głowicą.
+    Automatically calibrate the temperature offset of a smart radiator valve (TRV)
+    using the readings from an external room temperature sensor.
+    The blueprint calculates the correct offset based on the difference between the
+    valve's internal sensor and the actual room temperature, and then updates
+    the `number` entity that controls the valve’s local temperature offset.
+
+    ⚙️ Example use case:
+      - `climate_entity`: climate.hama_valve_gerald_thermostat  
+      - `external_sensor`: sensor.lumi_gerald_temperature  
+      - `offset_number_entity`: number.hama_valve_gerald_local_temperature_offset_2  
+      - `rounding_step`: 1.0  
+
+    This ensures that the TRV measures the same temperature as your external room sensor.
   domain: automation
   source_url: https://github.com/USER/hass-valve-temp-calibration-blueprint/blob/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml
+
   input:
     climate_entity:
-      name: Głowica termostatyczna
-      description: Wybierz encję climate reprezentującą zawór lub głowicę termostatyczną.
+      name: Thermostatic valve (climate)
+      description: >
+        Select the `climate` entity of your smart radiator valve (TRV).
+        This is the entity that controls the heating in Home Assistant,
+        for example: `climate.hama_valve_gerald_thermostat`.
       selector:
         entity:
           domain: climate
+
     external_sensor:
-      name: Zewnętrzny czujnik temperatury
-      description: Wybierz encję sensora dostarczającą rzeczywisty odczyt temperatury pomieszczenia.
+      name: External temperature sensor
+      description: >
+        Select the temperature sensor that measures the actual room temperature.
+        This should be a `sensor` entity that provides the correct ambient temperature,
+        for example: `sensor.lumi_gerald_temperature`.
       selector:
         entity:
           domain: sensor
           device_class: temperature
+
     min_interval:
-      name: Minimalny odstęp pomiędzy aktualizacjami
-      description: Minimalny czas (w sekundach), jaki musi upłynąć pomiędzy kolejnymi zapisami offsetu.
+      name: Minimum time between updates
+      description: >
+        The minimum amount of time (in seconds) that must pass before the offset
+        can be updated again. This prevents the valve from being recalibrated too often.
+        A typical value is 300 seconds (5 minutes).
       default: 300
       selector:
         number:
@@ -31,6 +54,30 @@ blueprint:
           mode: box
           unit_of_measurement: s
 
+    offset_number_entity:
+      name: Temperature offset entity (number)
+      description: >
+        Select the `number` entity that controls the valve’s temperature offset.
+        It usually ends with `_local_temperature_offset` and is linked to the valve device.
+        Example: `number.hama_valve_gerald_local_temperature_offset_2`.
+      selector:
+        entity:
+          domain: number
+
+    rounding_step:
+      name: Rounding step for offset value
+      description: >
+        Define the step to which the calculated offset should be rounded.
+        Use `0.5` for valves that support half-degree steps, or `1.0` for full degrees.
+      default: 1.0
+      selector:
+        number:
+          min: 0.1
+          max: 2
+          step: 0.1
+          mode: box
+          unit_of_measurement: "°C"
+
 mode: single
 max_exceeded: silent
 
@@ -38,28 +85,35 @@ variables:
   climate_entity: !input climate_entity
   external_sensor: !input external_sensor
   min_interval: !input min_interval
-  offset_entity: >
-    {% set device = device_id(climate_entity) %}
-    {% if device %}
-      {% set candidates = device_entities(device) | select('match', '^number\\..*_local_temperature_offset.*') | list %}
-      {{ candidates[0] if candidates|length > 0 else '' }}
-    {% else %}
-      ''
-    {% endif %}
+  offset_entity: !input offset_number_entity
+  rounding_step: !input rounding_step
+
+  # Current offset value from the number entity
   current_offset: >
     {% if offset_entity %}
       {{ states(offset_entity) | float(0) }}
     {% else %}
       0
     {% endif %}
+
+  # Temperature reported by the valve (internal sensor)
   current_temperature: >
     {{ state_attr(climate_entity, 'current_temperature') | float(0) }}
+
+  # Temperature from the external room sensor
   external_temperature: >
     {{ states(external_sensor) | float(0) }}
+
+  # Calculate new offset = external - (valve_temperature - current_offset)
+  # The result is rounded to the nearest step defined by rounding_step.
   calculated_offset: >
-    {{ (external_temperature - (current_temperature - current_offset)) | round(0) | int }}
+    {% set step = rounding_step | float(1) %}
+    {% set raw = external_temperature - (current_temperature - current_offset) %}
+    {{ ((raw / step) | round(0)) * step }}
 
 trigger:
+  # Trigger recalculation when either the valve's internal temperature
+  # or the external room temperature changes.
   - platform: state
     entity_id: !input external_sensor
   - platform: state
@@ -67,14 +121,18 @@ trigger:
     attribute: current_temperature
 
 condition:
+  # Make sure the offset entity is valid
   - condition: template
     value_template: "{{ offset_entity != '' }}"
+
+  # Prevent running too often (throttle interval)
   - condition: template
     value_template: >
       {% set last = state_attr(this.entity_id, 'last_triggered') %}
       {{ (as_timestamp(now()) - as_timestamp(last or 0)) > min_interval }}
 
 action:
+  # Update the TRV offset with the calculated value
   - service: number.set_value
     target:
       entity_id: "{{ offset_entity }}"
