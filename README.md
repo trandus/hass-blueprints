@@ -29,26 +29,24 @@ If new blueprints are added in the future, each will be stored in its own subdir
 
 ## 📥 Installing blueprints in Home Assistant
 
-The steps below show how to import any blueprint from this repository into Home Assistant. Repeat the process for every blueprint you want to enable.
+Follow the steps below to add any blueprint from this repository directly through the Home Assistant interface.
 
-1. **Download the repository files**
-   - Option A: Click the green `Code` button on GitHub and choose `Download ZIP`. Unpack the archive locally.
-   - Option B: Use Git to clone the repository directly on the machine that hosts Home Assistant: `git clone https://github.com/<your_fork>/hass-blueprints.git`.
-2. **Locate the blueprint file**
-   - Inside the repository, open the `blueprints/automation/` directory.
-   - Each blueprint has its own folder (for example, `valve_temperature_calibration/`). The YAML file inside that folder (such as `auto_offset_calibration.yaml`) is the blueprint definition.
-3. **Copy the blueprint to Home Assistant**
-   - If you manage Home Assistant via the file system (Home Assistant Operating System, Container, or Core), copy the selected blueprint folder into `<config>/blueprints/automation/` on your Home Assistant instance. Create missing directories if necessary, keeping the same folder structure as in this repository.
-   - When using the Home Assistant UI file editor, upload the YAML file to `config/blueprints/automation/<folder_name>/<blueprint_file>.yaml`.
-4. **Reload blueprints**
-   - In Home Assistant, open `Settings` → `Automations & Scenes`, click the three-dot menu in the upper right corner, and choose `Reload Blueprints`.
-5. **Create an automation from the blueprint**
-   - Still on the `Automations` tab, click `+ Create automation` → `Start with a blueprint`.
-   - Pick the imported blueprint from the list and fill in the required inputs.
-6. **Repeat for additional blueprints**
-   - If you want to use more than one blueprint from this repository, repeat steps 2–5 for each blueprint directory you copy into Home Assistant.
+1. **Copy the import link**
+   - In this repository, open the blueprint file you want to use (for example, [`blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml`](blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml) or directly at <https://github.com/trandus/hass-blueprints/blob/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml>).
+   - Click the `Raw` button in the GitHub toolbar and copy the URL from your browser's address bar.
+2. **Start the import in Home Assistant**
+   - In Home Assistant, go to `Settings` → `Automations & Scenes` → `Blueprints`.
+   - Click `Import Blueprint` in the upper-right corner.
+3. **Paste the GitHub URL**
+   - Paste the copied `raw` GitHub URL into the `URL` field.
+   - Confirm by pressing `Preview`. Home Assistant loads the blueprint metadata and shows a summary.
+4. **Finish the import**
+   - Review the details and click `Import`. Home Assistant saves the blueprint under `Settings` → `Automations & Scenes` → `Blueprints`.
+5. **Create an automation**
+   - Click `Create Automation` on the confirmation dialog or return later to `Settings` → `Automations & Scenes` → `Automations` and choose `Create automation` → `Start with a blueprint`.
+   - Select the newly imported blueprint and configure the required inputs.
 
-> **Tip:** To stay up to date, periodically pull the latest changes from the repository or replace the blueprint files with newer versions before reloading blueprints in Home Assistant.
+> **Tip:** When an update is available, go to `Settings` → `Automations & Scenes` → `Blueprints`, open the blueprint, and choose `Update blueprint` from the menu to re-download it from GitHub. Manual file management is also possible if you prefer, but it is not covered here.
 
 ## 🔧 Blueprint configuration
 
