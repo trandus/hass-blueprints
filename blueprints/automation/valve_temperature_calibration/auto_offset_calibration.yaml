@@ -14,6 +14,14 @@ blueprint:
       - `rounding_step`: 1.0  
 
     This ensures that the TRV measures the same temperature as your external room sensor.
+
+    ➕ Manual correction:
+      Use the **manual_correction** slider to bias the calculated offset in cases where the valve
+      tends to stop heating too early or overheats even after calibration.
+
+      - Positive value (e.g., +0.3 °C): The valve will assume the room is warmer → it reduces heating sooner.
+      - Negative value (e.g., −0.3 °C): The valve will assume the room is cooler → it prolongs heating.
+
   domain: automation
   source_url: https://github.com/USER/hass-valve-temp-calibration-blueprint/blob/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml
 
@@ -78,6 +86,23 @@ blueprint:
           mode: box
           unit_of_measurement: "°C"
 
+    manual_correction:
+      name: Manual correction (bias)
+      description: >
+        Additional manual bias applied to the computed offset **before rounding**.
+        Use this if the valve still behaves undesirably after calibration:
+        - **Positive value** (e.g., +0.1…+1.0 °C): Makes the valve think it's **warmer** → **reduces** heating sooner.
+        - **Negative value** (e.g., −0.1…−1.0 °C): Makes the valve think it's **cooler** → **prolongs** heating.
+        Recommended start: 0.0 °C. Adjust in small steps (±0.1 °C), observe behavior for a few cycles.
+      default: 0.0
+      selector:
+        number:
+          min: -1.0
+          max: 1.0
+          step: 0.1
+          mode: slider
+          unit_of_measurement: "°C"
+
 mode: single
 max_exceeded: silent
 
@@ -87,6 +112,7 @@ variables:
   min_interval: !input min_interval
   offset_entity: !input offset_number_entity
   rounding_step: !input rounding_step
+  manual_correction: !input manual_correction
 
   # Current offset value from the number entity
   current_offset: >
@@ -104,16 +130,15 @@ variables:
   external_temperature: >
     {{ states(external_sensor) | float(0) }}
 
-  # Calculate new offset = external - (valve_temperature - current_offset)
-  # The result is rounded to the nearest step defined by rounding_step.
+  # Calculate new offset:
+  #   offset = [external - (valve_temperature - current_offset)] + manual_correction
+  # then round to the nearest rounding_step.
   calculated_offset: >
     {% set step = rounding_step | float(1) %}
-    {% set raw = external_temperature - (current_temperature - current_offset) %}
+    {% set raw = external_temperature - (current_temperature - current_offset) + (manual_correction | float(0)) %}
     {{ ((raw / step) | round(0)) * step }}
 
 trigger:
-  # Trigger recalculation when either the valve's internal temperature
-  # or the external room temperature changes.
   - platform: state
     entity_id: !input external_sensor
   - platform: state
@@ -121,18 +146,14 @@ trigger:
     attribute: current_temperature
 
 condition:
-  # Make sure the offset entity is valid
   - condition: template
     value_template: "{{ offset_entity != '' }}"
-
-  # Prevent running too often (throttle interval)
   - condition: template
     value_template: >
       {% set last = state_attr(this.entity_id, 'last_triggered') %}
       {{ (as_timestamp(now()) - as_timestamp(last or 0)) > min_interval }}
 
 action:
-  # Update the TRV offset with the calculated value
   - service: number.set_value
     target:
       entity_id: "{{ offset_entity }}"
