@@ -28,6 +28,16 @@ blueprint:
         entity:
           domain: climate
 
+    offset_number_entity:
+      name: Temperature offset entity (number)
+      description: >
+        Select the `number` entity that controls the valve’s temperature offset.
+        It usually ends with `_local_temperature_offset` and is linked to the valve device.
+        Example: `number.hama_valve_gerald_local_temperature_offset_2`.
+      selector:
+        entity:
+          domain: number
+
     external_sensor:
       name: External temperature sensor
       description: >
@@ -53,16 +63,6 @@ blueprint:
           step: 1
           mode: box
           unit_of_measurement: s
-
-    offset_number_entity:
-      name: Temperature offset entity (number)
-      description: >
-        Select the `number` entity that controls the valve’s temperature offset.
-        It usually ends with `_local_temperature_offset` and is linked to the valve device.
-        Example: `number.hama_valve_gerald_local_temperature_offset_2`.
-      selector:
-        entity:
-          domain: number
 
     rounding_step:
       name: Rounding step for offset value
