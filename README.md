@@ -31,18 +31,18 @@ If new blueprints are added in the future, each will be stored in its own subdir
 
 ## 🗂 Blueprint catalog
 
-| Blueprint | Version | File | Description |
-| --- | --- | --- | --- |
-| Periodic low battery report | 0.1.0 | `periodic_low_battery_report.yaml` | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
-| Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
+| Blueprint | Version | File | Download link | Description |
+| --- | --- | --- | --- | --- |
+| Periodic low battery report | 0.1.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
+| Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📥 Installing blueprints in Home Assistant
 
 Follow the steps below to add any blueprint from this repository directly through the Home Assistant interface.
 
 1. **Copy the import link**
-   - In this repository, open the blueprint file you want to use (for example, [`blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml`](blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml) or directly at <https://github.com/trandus/hass-blueprints/blob/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml>).
-   - Click the `Raw` button in the GitHub toolbar and copy the URL from your browser's address bar.
+   - Use one of the direct download links from the **Blueprint catalog** table above.
+   - If you prefer, open the blueprint file in this repository and click the `Raw` button in the GitHub toolbar to copy the URL from your browser's address bar.
 2. **Start the import in Home Assistant**
    - In Home Assistant, go to `Settings` → `Automations & Scenes` → `Blueprints`.
    - Click `Import Blueprint` in the upper-right corner.
