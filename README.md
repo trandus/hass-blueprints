@@ -1,20 +1,22 @@
-# 🧠 Home Assistant – Valve Temperature Offset Blueprint
+# 🧠 Home Assistant Blueprints
 
-A simple Home Assistant automation blueprint that updates the calibration (offset) of a selected thermostatic valve (`climate` entity) based on the reading from an external temperature sensor. By continuously aligning the valve's measurement with the actual room temperature, your thermostat reflects real conditions more accurately.
+Collection of Home Assistant automation blueprints focused on practical home automations, including thermostat calibration and periodic low-battery reporting.
 
 ## 🚀 Features
 
-- automatically calculates the offset value from the difference between the external sensor and the valve's built-in sensor,
-- applies an optional manual correction (bias) before rounding so you can fine-tune how aggressively the valve heats,
-- rounds the offset to the increment supported by the device (for example `0.5` °C or `1.0` °C),
-- writes the calculated offset to the corresponding `number` entity (`*_local_temperature_offset`) of the device,
-- includes a basic time lock to limit how often the value is updated (minimum every 5 minutes by default).
+- valve temperature offset calibration based on an external sensor,
+- optional manual correction and configurable rounding step for valve offsets,
+- periodic low-battery reporting (daily / weekly / monthly),
+- per-sensor battery threshold configuration (0..20%, default <= 1%),
+- notifications to phone(s) and/or Home Assistant persistent notifications.
 
 ## 📁 Repository structure
 
 ```
 blueprints/
 └── automation/
+    ├── battery_low_level_report/
+    │   └── periodic_low_battery_report.yaml
     └── valve_temperature_calibration/
         └── auto_offset_calibration.yaml
 ```
@@ -25,6 +27,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 
 | Blueprint | Version | File | Description |
 | --- | --- | --- | --- |
+| Periodic low battery report | 1.0.0 | `periodic_low_battery_report.yaml` | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
 | Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📥 Installing blueprints in Home Assistant
@@ -49,6 +52,35 @@ Follow the steps below to add any blueprint from this repository directly throug
 > **Tip:** When an update is available, go to `Settings` → `Automations & Scenes` → `Blueprints`, open the blueprint, and choose `Update blueprint` from the menu to re-download it from GitHub. Manual file management is also possible if you prefer, but it is not covered here.
 
 ## 🔧 Blueprint configuration
+
+### Periodic low battery report
+
+The blueprint requires the following inputs:
+
+1. **Report frequency** – choose `Daily`, `Weekly`, or `Monthly`.
+2. **Report time** – set the time when the report should be generated.
+3. **Weekday for weekly report** – used only when frequency is set to weekly.
+4. **Day of month for monthly report** – used only when frequency is set to monthly.
+5. **Monitored batteries with individual thresholds** – provide a YAML list of battery sensors, each with its own optional threshold.
+   - `battery_sensor` – sensor entity with battery level.
+   - `threshold` – value from `0` to `20` (%), step `1`; if not provided, default threshold `1` is used (`<= 1%`).
+6. **Phone notification action(s)** – optional phone notification action(s), usually `notify.mobile_app_*`.
+7. **Send Home Assistant persistent notification** – if enabled, creates a persistent notification inside Home Assistant.
+
+Example configuration for monitored batteries:
+
+```yaml
+- battery_sensor: sensor.kitchen_remote_battery
+  threshold: 5
+- battery_sensor: sensor.window_sensor_battery
+  threshold: 1
+```
+
+The report message includes either:
+- a list of sensors with battery levels below or equal to each sensor threshold,
+- or a single line stating that no low battery levels were detected.
+
+### Valve temperature offset calibration
 
 The blueprint requires the following inputs:
 

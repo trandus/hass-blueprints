@@ -1,0 +1,194 @@
+blueprint:
+  name: Periodic Low Battery Report
+  description: |
+    Send a periodic battery report (daily, weekly, or monthly) for any number of battery sensors.
+
+    Each monitored sensor can have its own low-battery threshold in the range 0..20 (%).
+    If a threshold is not provided for a specific sensor, the default threshold is 1% (<= 1%).
+
+    The report can be sent:
+      - to one or more phone notification services (for example `notify.mobile_app_*`),
+      - as a Home Assistant persistent notification,
+      - or both.
+
+    Input format for `Monitored batteries with individual thresholds`:
+      - battery_sensor: sensor.kitchen_remote_battery
+        threshold: 5
+      - battery_sensor: sensor.bedroom_sensor_battery
+        threshold: 1
+
+  domain: automation
+  source_url: https://github.com/trandus/hass-blueprints/blob/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml
+
+  input:
+    report_frequency:
+      name: Report frequency
+      description: Select how often the summary report should be sent.
+      default: daily
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Daily
+              value: daily
+            - label: Weekly
+              value: weekly
+            - label: Monthly
+              value: monthly
+
+    report_time:
+      name: Report time
+      description: Time when the report should be generated.
+      default: "09:00:00"
+      selector:
+        time: {}
+
+    report_weekday:
+      name: Weekday for weekly report
+      description: Used only when frequency is set to weekly.
+      default: mon
+      selector:
+        select:
+          mode: dropdown
+          options:
+            - label: Monday
+              value: mon
+            - label: Tuesday
+              value: tue
+            - label: Wednesday
+              value: wed
+            - label: Thursday
+              value: thu
+            - label: Friday
+              value: fri
+            - label: Saturday
+              value: sat
+            - label: Sunday
+              value: sun
+
+    report_day_of_month:
+      name: Day of month for monthly report
+      description: Used only when frequency is set to monthly.
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 28
+          step: 1
+          mode: slider
+
+    monitored_batteries:
+      name: Monitored batteries with individual thresholds
+      description: |
+        Provide a YAML list where each item contains:
+          - `battery_sensor`: battery sensor entity ID
+          - `threshold`: optional threshold in % (0..20, step 1)
+
+        Example:
+          - battery_sensor: sensor.kitchen_remote_battery
+            threshold: 5
+          - battery_sensor: sensor.window_sensor_battery
+            threshold: 1
+
+        If threshold is missing, default 1% is used.
+      default:
+        - battery_sensor: sensor.example_battery
+          threshold: 1
+      selector:
+        object: {}
+
+    phone_notification_actions:
+      name: Phone notification action(s)
+      description: Optional action sequence for phone notifications, for example notify.mobile_app_* services.
+      default: []
+      selector:
+        action: {}
+
+    send_persistent_notification:
+      name: Send Home Assistant persistent notification
+      description: If enabled, report is also shown as a persistent notification in Home Assistant.
+      default: true
+      selector:
+        boolean: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  report_frequency: !input report_frequency
+  report_weekday: !input report_weekday
+  report_day_of_month: !input report_day_of_month
+  monitored_batteries: !input monitored_batteries
+  phone_notification_actions: !input phone_notification_actions
+  send_persistent_notification: !input send_persistent_notification
+
+  low_battery_entries: >
+    {% set namespace_data = namespace(items=[]) %}
+    {% for item in monitored_batteries if item.battery_sensor is defined and item.battery_sensor | string | length > 0 %}
+      {% set sensor_id = item.battery_sensor | string %}
+      {% set battery_level = states(sensor_id) | float(none) %}
+      {% if battery_level is not none %}
+        {% set requested_threshold = item.threshold | default(1) | int(1) %}
+        {% set threshold = [20, [0, requested_threshold] | max] | min %}
+        {% if battery_level <= threshold %}
+          {% set sensor_name = state_attr(sensor_id, 'friendly_name') or sensor_id %}
+          {% set namespace_data.items = namespace_data.items + [
+            {
+              'sensor': sensor_id,
+              'name': sensor_name,
+              'level': battery_level | round(0),
+              'threshold': threshold
+            }
+          ] %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ namespace_data.items }}
+
+  report_lines: >
+    {% if low_battery_entries | count > 0 %}
+      {% for entry in low_battery_entries %}
+      - {{ entry.name }} ({{ entry.sensor }}): {{ entry.level }}% (threshold <= {{ entry.threshold }}%)
+      {% endfor %}
+    {% else %}
+      - No low battery levels detected for configured sensors.
+    {% endif %}
+
+  report_title: "Battery report"
+  report_message: >
+    {{ report_lines | trim }}
+
+trigger:
+  - platform: time
+    at: !input report_time
+
+condition:
+  - condition: template
+    value_template: >
+      {% if report_frequency == 'daily' %}
+        true
+      {% elif report_frequency == 'weekly' %}
+        {{ now().strftime('%a') | lower == report_weekday }}
+      {% elif report_frequency == 'monthly' %}
+        {{ now().day == report_day_of_month | int }}
+      {% else %}
+        false
+      {% endif %}
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ (phone_notification_actions | default([])) | count > 0 }}"
+        sequence: !input phone_notification_actions
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ send_persistent_notification }}"
+        sequence:
+          - service: persistent_notification.create
+            data:
+              title: "{{ report_title }}"
+              message: "{{ report_message }}"
+              notification_id: periodic_low_battery_report
