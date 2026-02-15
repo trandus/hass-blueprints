@@ -5,9 +5,11 @@ Collection of Home Assistant automation blueprints focused on practical home aut
 ## 🚀 Features
 
 ### Valve temperature offset calibration
-- Automatically calculates offset from external and valve temperature readings.
-- Supports optional manual correction (bias).
-- Rounds the resulting offset to the device-supported step.
+- automatically calculates the offset value from the difference between the external sensor and the valve's built-in sensor,
+- applies an optional manual correction (bias) before rounding so you can fine-tune how aggressively the valve heats,
+- rounds the offset to the increment supported by the device (for example `0.5` °C or `1.0` °C),
+- writes the calculated offset to the corresponding `number` entity (`*_local_temperature_offset`) of the device,
+- includes a basic time lock to limit how often the value is updated (minimum every 5 minutes by default).
 
 ### Periodic low battery report
 - Sends reports on a daily, weekly, or monthly schedule.
