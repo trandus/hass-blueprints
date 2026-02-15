@@ -3,6 +3,8 @@ blueprint:
   description: |
     Send a periodic battery report (daily, weekly, or monthly) for any number of battery sensors.
 
+    Blueprint version: 0.1.0
+
     Each monitored sensor can have its own low-battery threshold in the range 0..20 (%).
     If a threshold is not provided for a specific sensor, the default threshold is 1% (<= 1%).
 

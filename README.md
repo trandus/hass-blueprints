@@ -1,14 +1,18 @@
-# 🧠 Home Assistant Blueprints
+# 🧠 trandus' Home Assistant Blueprints
 
 Collection of Home Assistant automation blueprints focused on practical home automations, including thermostat calibration and periodic low-battery reporting.
 
 ## 🚀 Features
 
-- valve temperature offset calibration based on an external sensor,
-- optional manual correction and configurable rounding step for valve offsets,
-- periodic low-battery reporting (daily / weekly / monthly),
-- per-sensor battery threshold configuration (0..20%, default <= 1%),
-- notifications to phone(s) and/or Home Assistant persistent notifications.
+### Valve temperature offset calibration
+- Automatically calculates offset from external and valve temperature readings.
+- Supports optional manual correction (bias).
+- Rounds the resulting offset to the device-supported step.
+
+### Periodic low battery report
+- Sends reports on a daily, weekly, or monthly schedule.
+- Supports per-sensor battery thresholds in range 0..20% (default <= 1%).
+- Can notify phone(s), Home Assistant persistent notifications, or both.
 
 ## 📁 Repository structure
 
@@ -27,7 +31,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 
 | Blueprint | Version | File | Description |
 | --- | --- | --- | --- |
-| Periodic low battery report | 1.0.0 | `periodic_low_battery_report.yaml` | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
+| Periodic low battery report | 0.1.0 | `periodic_low_battery_report.yaml` | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
 | Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📥 Installing blueprints in Home Assistant
