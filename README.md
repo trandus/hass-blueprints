@@ -36,7 +36,7 @@ custom_components/
             ├── controller_ikea_e2201/
             │   └── ikea_e2201_rodret_dimmer.yaml
             └── valve_temperature_calibration/
-                └── auto_offset_calibration.yaml
+                └── valve_temperature_offset_calibration.yaml
 ```
 
 If new blueprints are added in the future, each will be stored in its own subdirectory under `custom_components/trandus_blueprints/blueprints/automation/`.
@@ -47,7 +47,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 | --- | --- | --- | --- | --- |
 | Controller - IKEA E2201 RODRET Dimmer | 2025.03.20c (modified fork) | `ikea_e2201_rodret_dimmer.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/custom_components/trandus_blueprints/blueprints/automation/controller_ikea_e2201/ikea_e2201_rodret_dimmer.yaml) | Controller automation for IKEA RODRET (E2201) with short/long/release/double actions, based on and modified from EPMatt's Awesome HA Blueprints. |
 | Periodic low battery report | 0.2.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/custom_components/trandus_blueprints/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
-| Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/custom_components/trandus_blueprints/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
+| Valve temperature offset calibration | 0.2.0 | `valve_temperature_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/custom_components/trandus_blueprints/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📦 HACS installation (repository)
 
