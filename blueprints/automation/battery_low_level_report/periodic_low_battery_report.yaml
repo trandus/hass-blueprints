@@ -3,10 +3,12 @@ blueprint:
   description: |
     Send a periodic battery report (daily, weekly, or monthly) for any number of battery sensors.
 
-    Blueprint version: 0.1.0
+    Blueprint version: 0.2.0
 
     Each monitored sensor can have its own low-battery threshold in the range 0..20 (%).
     If a threshold is not provided for a specific sensor, the default threshold is 1% (<= 1%).
+    Sensors with an `unavailable` state are skipped by default and do not break report generation.
+    You can opt in per sensor to include `unavailable` state in low-battery report entries.
 
     The report can be sent:
       - to one or more phone notification services (for example `notify.mobile_app_*`),
@@ -16,8 +18,10 @@ blueprint:
     Input format for `Monitored batteries with individual thresholds`:
       - battery_sensor: sensor.kitchen_remote_battery
         threshold: 5
+        include_unavailable: false
       - battery_sensor: sensor.bedroom_sensor_battery
         threshold: 1
+        include_unavailable: true
 
   domain: automation
   source_url: https://github.com/trandus/hass-blueprints/blob/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml
@@ -85,17 +89,21 @@ blueprint:
         Provide a YAML list where each item contains:
           - `battery_sensor`: battery sensor entity ID
           - `threshold`: optional threshold in % (0..20, step 1)
+          - `include_unavailable`: optional boolean, when `true` report includes `unavailable` state for this sensor
 
         Example:
           - battery_sensor: sensor.kitchen_remote_battery
             threshold: 5
+            include_unavailable: false
           - battery_sensor: sensor.window_sensor_battery
             threshold: 1
+            include_unavailable: true
 
         If threshold is missing, default 1% is used.
       default:
         - battery_sensor: sensor.example_battery
           threshold: 1
+          include_unavailable: false
       selector:
         object: {}
 
@@ -128,12 +136,25 @@ variables:
     {% set namespace_data = namespace(items=[]) %}
     {% for item in monitored_batteries if item.battery_sensor is defined and item.battery_sensor | string | length > 0 %}
       {% set sensor_id = item.battery_sensor | string %}
+      {% set sensor_name = state_attr(sensor_id, 'friendly_name') or sensor_id %}
+      {% set sensor_state = states(sensor_id) %}
+      {% set include_unavailable = item.include_unavailable | default(false) %}
       {% set battery_level = states(sensor_id) | float(none) %}
-      {% if battery_level is not none %}
+      {% if sensor_state | lower == 'unavailable' %}
+        {% if include_unavailable %}
+          {% set namespace_data.items = namespace_data.items + [
+            {
+              'sensor': sensor_id,
+              'name': sensor_name,
+              'level': 'unavailable',
+              'threshold': none
+            }
+          ] %}
+        {% endif %}
+      {% elif battery_level is not none %}
         {% set requested_threshold = item.threshold | default(1) | int(1) %}
         {% set threshold = [20, [0, requested_threshold] | max] | min %}
         {% if battery_level <= threshold %}
-          {% set sensor_name = state_attr(sensor_id, 'friendly_name') or sensor_id %}
           {% set namespace_data.items = namespace_data.items + [
             {
               'sensor': sensor_id,
@@ -150,7 +171,11 @@ variables:
   report_lines: >
     {% if low_battery_entries | count > 0 %}
       {% for entry in low_battery_entries %}
+      {% if entry.level == 'unavailable' %}
+      - {{ entry.name }} ({{ entry.sensor }}): unavailable
+      {% else %}
       - {{ entry.name }} ({{ entry.sensor }}): {{ entry.level }}% (threshold <= {{ entry.threshold }}%)
+      {% endif %}
       {% endfor %}
     {% else %}
       - No low battery levels detected for configured sensors.
