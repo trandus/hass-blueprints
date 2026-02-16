@@ -46,6 +46,18 @@ If new blueprints are added in the future, each will be stored in its own subdir
 | Periodic low battery report | 0.2.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
 | Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
+## 📦 HACS installation (repository)
+
+This repository is structured for **HACS as a `Template` repository**.
+
+1. In Home Assistant open **HACS** → **⋮** → **Custom repositories**.
+2. Add `https://github.com/trandus/hass-blueprints`.
+3. Select repository type: **Template** (not Integration).
+4. Install the repository from HACS.
+5. Import selected blueprint files from the installed `blueprints/automation/...` folder in Home Assistant.
+
+> If you add this repository as **Integration**, HACS will show `Repository structure for main is not compliant`, because this project contains blueprints, not a custom integration in `custom_components/`.
+
 ## 📥 Installing blueprints in Home Assistant
 
 Follow the steps below to add any blueprint from this repository directly through the Home Assistant interface.
