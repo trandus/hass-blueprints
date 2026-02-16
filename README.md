@@ -19,6 +19,8 @@ affected blueprint files.
 ### Periodic low battery report
 - Sends reports on a daily, weekly, or monthly schedule.
 - Supports per-sensor battery thresholds in range 0..20% (default <= 1%).
+- Ignores `unavailable` battery sensors by default, so report generation is not interrupted by missing sensor state.
+- Can optionally include `unavailable` state per sensor in the low-battery report output.
 - Can notify phone(s), Home Assistant persistent notifications, or both.
 
 ## 📁 Repository structure
@@ -41,7 +43,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 | Blueprint | Version | File | Download link | Description |
 | --- | --- | --- | --- | --- |
 | Controller - IKEA E2201 RODRET Dimmer | 2025.03.20c (modified fork) | `ikea_e2201_rodret_dimmer.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/controller_ikea_e2201/ikea_e2201_rodret_dimmer.yaml) | Controller automation for IKEA RODRET (E2201) with short/long/release/double actions, based on and modified from EPMatt's Awesome HA Blueprints. |
-| Periodic low battery report | 0.1.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
+| Periodic low battery report | 0.2.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
 | Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📥 Installing blueprints in Home Assistant
@@ -75,9 +77,10 @@ The blueprint requires the following inputs:
 2. **Report time** – set the time when the report should be generated.
 3. **Weekday for weekly report** – used only when frequency is set to weekly.
 4. **Day of month for monthly report** – used only when frequency is set to monthly.
-5. **Monitored batteries with individual thresholds** – provide a YAML list of battery sensors, each with its own optional threshold.
+5. **Monitored batteries with individual thresholds** – provide a YAML list of battery sensors, each with its own optional settings.
    - `battery_sensor` – sensor entity with battery level.
    - `threshold` – value from `0` to `20` (%), step `1`; if not provided, default threshold `1` is used (`<= 1%`).
+   - `include_unavailable` – optional boolean (`true`/`false`); when set to `true`, a sensor in `unavailable` state is included in the report message.
 6. **Phone notification action(s)** – optional phone notification action(s), usually `notify.mobile_app_*`.
 7. **Send Home Assistant persistent notification** – if enabled, creates a persistent notification inside Home Assistant.
 
@@ -86,12 +89,15 @@ Example configuration for monitored batteries:
 ```yaml
 - battery_sensor: sensor.kitchen_remote_battery
   threshold: 5
+  include_unavailable: false
 - battery_sensor: sensor.window_sensor_battery
   threshold: 1
+  include_unavailable: true
 ```
 
 The report message includes either:
 - a list of sensors with battery levels below or equal to each sensor threshold,
+- optionally (per sensor) entries for sensors currently in `unavailable` state,
 - or a single line stating that no low battery levels were detected.
 
 ### Valve temperature offset calibration

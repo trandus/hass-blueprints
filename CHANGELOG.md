@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.1] - 2026-02-16
+### Changed
+- Updated `Periodic Low Battery Report` blueprint to safely skip sensors in `unavailable` state without errors and added per-sensor `include_unavailable` option to include unavailable sensors in report output.
+- Updated README documentation for the new unavailable handling behavior and configuration option.
+
 ## [0.3.0] - 2026-02-16
 ### Added
 - New `Controller - IKEA E2201 RODRET Dimmer` automation blueprint (`2025.03.20c`, modified fork), based on EPMatt's Awesome HA Blueprints controller with attribution and updated source URL to this repository.
