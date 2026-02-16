@@ -1,0 +1,11 @@
+{
+  "domain": "trandus_blueprints",
+  "name": "Trandus Blueprints",
+  "version": "1.0.0",
+  "documentation": "https://github.com/trandus/hass-blueprints",
+  "issue_tracker": "https://github.com/trandus/hass-blueprints/issues",
+  "codeowners": [
+    "@trandus"
+  ],
+  "integration_type": "helper"
+}
