@@ -5,7 +5,7 @@ blueprint:
 
     Blueprint version: 0.2.0
 
-    Each monitored sensor can have its own low-battery threshold in the range 0..20 (%).
+    Each monitored sensor can have its own low-battery threshold in the range 0..100 (%).
     If a threshold is not provided for a specific sensor, the default threshold is 1% (<= 1%).
     Sensors with an `unavailable` state are skipped by default and do not break report generation.
     You can opt in per sensor to include `unavailable` state in low-battery report entries.
@@ -88,7 +88,7 @@ blueprint:
       description: |
         Provide a YAML list where each item contains:
           - `battery_sensor`: battery sensor entity ID
-          - `threshold`: optional threshold in % (0..20, step 1)
+          - `threshold`: optional threshold in % (0..100, step 1)
           - `include_unavailable`: optional boolean, when `true` report includes `unavailable` state for this sensor
 
         Example:
@@ -153,7 +153,7 @@ variables:
         {% endif %}
       {% elif battery_level is not none %}
         {% set requested_threshold = item.threshold | default(1) | int(1) %}
-        {% set threshold = [20, [0, requested_threshold] | max] | min %}
+        {% set threshold = [100, [0, requested_threshold] | max] | min %}
         {% if battery_level <= threshold %}
           {% set namespace_data.items = namespace_data.items + [
             {
