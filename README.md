@@ -2,6 +2,11 @@
 
 Collection of Home Assistant automation blueprints focused on practical home automations, including thermostat calibration and periodic low-battery reporting.
 
+Some blueprints in this repository may be based on and modified from the
+[Awesome HA Blueprints](https://github.com/EPMatt/awesome-ha-blueprints)
+project by EPMatt. Attribution and original-source links are provided in the
+affected blueprint files.
+
 ## 🚀 Features
 
 ### Valve temperature offset calibration
@@ -23,6 +28,8 @@ blueprints/
 └── automation/
     ├── battery_low_level_report/
     │   └── periodic_low_battery_report.yaml
+    ├── controller_ikea_e2201/
+    │   └── ikea_e2201_rodret_dimmer.yaml
     └── valve_temperature_calibration/
         └── auto_offset_calibration.yaml
 ```
@@ -33,6 +40,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 
 | Blueprint | Version | File | Download link | Description |
 | --- | --- | --- | --- | --- |
+| Controller - IKEA E2201 RODRET Dimmer | 2025.03.20c (modified fork) | `ikea_e2201_rodret_dimmer.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/controller_ikea_e2201/ikea_e2201_rodret_dimmer.yaml) | Controller automation for IKEA RODRET (E2201) with short/long/release/double actions, based on and modified from EPMatt's Awesome HA Blueprints. |
 | Periodic low battery report | 0.1.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
 | Valve temperature offset calibration | 0.2.0 | `auto_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/valve_temperature_calibration/auto_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
