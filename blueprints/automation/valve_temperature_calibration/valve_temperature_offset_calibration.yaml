@@ -28,7 +28,7 @@ blueprint:
       - calculated value is clamped to target `number` entity min/max range when available.
 
   domain: automation
-  source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/custom_components/trandus_blueprints/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml
+  source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml
 
   input:
     climate_entity:

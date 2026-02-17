@@ -24,7 +24,7 @@ blueprint:
         include_unavailable: true
 
   domain: automation
-  source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/custom_components/trandus_blueprints/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml
+  source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml
 
   input:
     report_frequency:
