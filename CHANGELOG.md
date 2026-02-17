@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4] - 2026-02-17
+### Changed
+- Restructured the repository to a standard blueprint layout, moving all blueprints to `blueprints/automation/...`.
+- Updated all blueprint `source_url` metadata to point to `blueprints/automation/...` paths.
+- Simplified `hacs.json` and repository setup to use HACS repository type `Blueprint`.
+- Updated README structure and installation instructions to match the standard blueprint repository layout.
+
 ## [0.4.3] - 2026-02-17
 ### Changed
 - Optimized `Valve Temperature Offset Calibration` blueprint to skip recalculation when source states are unavailable/invalid instead of treating them as `0`.

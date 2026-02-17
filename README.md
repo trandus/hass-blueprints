@@ -28,41 +28,34 @@ affected blueprint files.
 ## 📁 Repository structure
 
 ```
-custom_components/
-└── trandus_blueprints/
-    ├── manifest.json
-    └── blueprints/
-        └── automation/
-            ├── battery_low_level_report/
-            │   └── periodic_low_battery_report.yaml
-            ├── controller_ikea_e2201/
-            │   └── ikea_e2201_rodret_dimmer.yaml
-            └── valve_temperature_calibration/
-                └── valve_temperature_offset_calibration.yaml
+blueprints/
+└── automation/
+    ├── battery_low_level_report/
+    │   └── periodic_low_battery_report.yaml
+    ├── controller_ikea_e2201/
+    │   └── ikea_e2201_rodret_dimmer.yaml
+    └── valve_temperature_calibration/
+        └── valve_temperature_offset_calibration.yaml
 ```
 
-If new blueprints are added in the future, each will be stored in its own subdirectory under `custom_components/trandus_blueprints/blueprints/automation/`.
+If new blueprints are added in the future, each will be stored in its own subdirectory under `blueprints/automation/`.
 
 ## 🗂 Blueprint catalog
 
 | Blueprint | Version | File | Download link | Description |
 | --- | --- | --- | --- | --- |
-| Controller - IKEA E2201 RODRET Dimmer | 2025.03.20c (modified fork) | `ikea_e2201_rodret_dimmer.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/custom_components/trandus_blueprints/blueprints/automation/controller_ikea_e2201/ikea_e2201_rodret_dimmer.yaml) | Controller automation for IKEA RODRET (E2201) with short/long/release/double actions, based on and modified from EPMatt's Awesome HA Blueprints. |
-| Periodic low battery report | 0.2.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/custom_components/trandus_blueprints/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
-| Valve temperature offset calibration | 0.2.0 | `valve_temperature_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/custom_components/trandus_blueprints/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
+| Controller - IKEA E2201 RODRET Dimmer | 2025.03.20c (modified fork) | `ikea_e2201_rodret_dimmer.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/controller_ikea_e2201/ikea_e2201_rodret_dimmer.yaml) | Controller automation for IKEA RODRET (E2201) with short/long/release/double actions, based on and modified from EPMatt's Awesome HA Blueprints. |
+| Periodic low battery report | 0.2.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
+| Valve temperature offset calibration | 0.2.0 | `valve_temperature_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📦 HACS installation (repository)
 
-This repository is structured for **HACS as an `Integration` repository**.
+This repository is structured as a standard **HACS `Blueprint` repository**.
 
 1. In Home Assistant open **HACS** → **⋮** → **Custom repositories**.
 2. Add `https://github.com/trandus/hass-blueprints`.
-3. Select repository type: **Integration**.
+3. Select repository type: **Blueprint**.
 4. Install the repository from HACS.
-5. Restart Home Assistant.
-6. In `Settings` → `Automations & Scenes` → `Blueprints`, import or update the blueprints provided by the `Trandus Blueprints` integration.
-
-> The repository now includes a minimal helper integration (`custom_components/trandus_blueprints`) with a valid `manifest.json`, so HACS can validate and install it as Integration.
 
 ## 📥 Installing blueprints in Home Assistant
 
@@ -70,7 +63,7 @@ Follow the steps below to add any blueprint from this repository directly throug
 
 1. **Copy the import link**
    - Use one of the direct download links from the **Blueprint catalog** table above.
-   - If you prefer, open the blueprint file in `custom_components/trandus_blueprints/blueprints/automation/...` and click the `Raw` button in the GitHub toolbar to copy the URL from your browser's address bar.
+   - If you prefer, open the blueprint file in `blueprints/automation/...` and click the `Raw` button in the GitHub toolbar to copy the URL from your browser's address bar.
 2. **Start the import in Home Assistant**
    - In Home Assistant, go to `Settings` → `Automations & Scenes` → `Blueprints`.
    - Click `Import Blueprint` in the upper-right corner.
