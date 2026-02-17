@@ -14,11 +14,13 @@ affected blueprint files.
 - applies an optional manual correction (bias) before rounding so you can fine-tune how aggressively the valve heats,
 - rounds the offset to the increment supported by the device (for example `0.5` °C or `1.0` °C),
 - writes the calculated offset to the corresponding `number` entity (`*_local_temperature_offset`) of the device,
-- includes a basic time lock to limit how often the value is updated (minimum every 5 minutes by default).
+- includes a basic time lock to limit how often the value is updated (minimum every 5 minutes by default),
+- skips updates when source sensor values are unavailable/invalid and avoids writing unchanged offset values,
+- clamps calculated offset to the target entity min/max range when those limits are exposed by the integration.
 
 ### Periodic low battery report
 - Sends reports on a daily, weekly, or monthly schedule.
-- Supports per-sensor battery thresholds in range 0..20% (default <= 1%).
+- Supports per-sensor battery thresholds in range 0..100% (default <= 1%).
 - Ignores `unavailable` battery sensors by default, so report generation is not interrupted by missing sensor state.
 - Can optionally include `unavailable` state per sensor in the low-battery report output.
 - Can notify phone(s), Home Assistant persistent notifications, or both.
@@ -95,7 +97,7 @@ The blueprint requires the following inputs:
 4. **Day of month for monthly report** – used only when frequency is set to monthly.
 5. **Monitored batteries with individual thresholds** – provide a YAML list of battery sensors, each with its own optional settings.
    - `battery_sensor` – sensor entity with battery level.
-   - `threshold` – value from `0` to `20` (%), step `1`; if not provided, default threshold `1` is used (`<= 1%`).
+   - `threshold` – value from `0` to `100` (%), step `1`; if not provided, default threshold `1` is used (`<= 1%`).
    - `include_unavailable` – optional boolean (`true`/`false`); when set to `true`, a sensor in `unavailable` state is included in the report message.
 6. **Phone notification action(s)** – optional phone notification action(s), usually `notify.mobile_app_*`.
 7. **Send Home Assistant persistent notification** – if enabled, creates a persistent notification inside Home Assistant.

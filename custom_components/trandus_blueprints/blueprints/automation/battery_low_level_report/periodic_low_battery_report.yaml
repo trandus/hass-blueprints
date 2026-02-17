@@ -168,14 +168,14 @@ variables:
     {% endfor %}
     {{ namespace_data.items }}
 
-  report_lines: >
+  report_lines: >-
     {% if low_battery_entries | count > 0 %}
       {% for entry in low_battery_entries %}
-      {% if entry.level == 'unavailable' %}
-      - {{ entry.name }} ({{ entry.sensor }}): unavailable
-      {% else %}
-      - {{ entry.name }} ({{ entry.sensor }}): {{ entry.level }}% (threshold <= {{ entry.threshold }}%)
-      {% endif %}
+        {% if entry.level == 'unavailable' %}
+          - {{ entry.name }} ({{ entry.sensor }}): unavailable
+        {% else %}
+          - {{ entry.name }} ({{ entry.sensor }}): {{ entry.level }}% (threshold <= {{ entry.threshold }}%)
+        {% endif %}
       {% endfor %}
     {% else %}
       - No low battery levels detected for configured sensors.

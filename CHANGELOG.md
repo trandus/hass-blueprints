@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3] - 2026-02-17
+### Changed
+- Optimized `Valve Temperature Offset Calibration` blueprint to skip recalculation when source states are unavailable/invalid instead of treating them as `0`.
+- Added guard to skip `number.set_value` when the computed offset does not differ meaningfully from the current value.
+- Added min/max clamping for computed offset using target `number` entity attributes when available.
+- Improved formatting of the `Periodic Low Battery Report` message template block for cleaner YAML/Jinja structure.
+- Updated README to reflect the actual battery threshold range (`0..100%`) and documented valve calibration reliability improvements.
+
 ## [0.4.2] - 2026-02-16
 ### Changed
 - Renamed Valve Temperature Offset Calibration blueprint file from `auto_offset_calibration.yaml` to `valve_temperature_offset_calibration.yaml`.

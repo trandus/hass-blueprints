@@ -22,6 +22,11 @@ blueprint:
       - Positive value (e.g., +0.3 °C): The valve will assume the room is warmer → it reduces heating sooner.
       - Negative value (e.g., −0.3 °C): The valve will assume the room is cooler → it prolongs heating.
 
+    Reliability improvements:
+      - offset updates are skipped when source values are unavailable/invalid,
+      - offset write is skipped when calculated value has not changed meaningfully,
+      - calculated value is clamped to target `number` entity min/max range when available.
+
   domain: automation
   source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/custom_components/trandus_blueprints/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml
 
@@ -117,26 +122,37 @@ variables:
   # Current offset value from the number entity
   current_offset: >
     {% if offset_entity %}
-      {{ states(offset_entity) | float(0) }}
+      {{ states(offset_entity) | float(none) }}
     {% else %}
-      0
+      {{ none }}
     {% endif %}
 
   # Temperature reported by the valve (internal sensor)
   current_temperature: >
-    {{ state_attr(climate_entity, 'current_temperature') | float(0) }}
+    {{ state_attr(climate_entity, 'current_temperature') | float(none) }}
 
   # Temperature from the external room sensor
   external_temperature: >
-    {{ states(external_sensor) | float(0) }}
+    {{ states(external_sensor) | float(none) }}
 
   # Calculate new offset:
   #   offset = [external - (valve_temperature - current_offset)] + manual_correction
   # then round to the nearest rounding_step.
   calculated_offset: >
     {% set step = rounding_step | float(1) %}
-    {% set raw = external_temperature - (current_temperature - current_offset) + (manual_correction | float(0)) %}
-    {{ ((raw / step) | round(0)) * step }}
+    {% if step <= 0 %}
+      {{ none }}
+    {% elif current_temperature is none or external_temperature is none or current_offset is none %}
+      {{ none }}
+    {% else %}
+      {% set raw = external_temperature - (current_temperature - current_offset) + (manual_correction | float(0)) %}
+      {% set rounded = ((raw / step) | round(0)) * step %}
+      {% set entity_min = state_attr(offset_entity, 'min') | float(none) %}
+      {% set entity_max = state_attr(offset_entity, 'max') | float(none) %}
+      {% set bounded_min = [rounded, entity_min] | max if entity_min is not none else rounded %}
+      {% set bounded = [bounded_min, entity_max] | min if entity_max is not none else bounded_min %}
+      {{ bounded }}
+    {% endif %}
 
 trigger:
   - platform: state
@@ -148,6 +164,12 @@ trigger:
 condition:
   - condition: template
     value_template: "{{ offset_entity != '' }}"
+  - condition: template
+    value_template: "{{ calculated_offset is not none }}"
+  - condition: template
+    value_template: >
+      {% set tolerance = (rounding_step | float(1)) / 2 %}
+      {{ current_offset is none or (calculated_offset - current_offset) | abs >= tolerance }}
   - condition: template
     value_template: >
       {% set last = state_attr(this.entity_id, 'last_triggered') %}
