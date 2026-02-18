@@ -7,7 +7,7 @@ blueprint:
     valve's internal sensor and the actual room temperature, and then updates
     the `number` entity that controls the valve’s local temperature offset.
 
-    ⚙️ Example use case:
+    Example use case:
       - `climate_entity`: climate.hama_valve_gerald_thermostat
       - `external_sensor`: sensor.lumi_gerald_temperature
       - `offset_number_entity`: number.hama_valve_gerald_local_temperature_offset_2
@@ -15,7 +15,7 @@ blueprint:
 
     This ensures that the TRV measures the same temperature as your external room sensor.
 
-    ➕ Manual correction:
+    Manual correction:
       Use the **manual_correction** slider to bias the calculated offset in cases where the valve
       tends to stop heating too early or overheats even after calibration.
 
