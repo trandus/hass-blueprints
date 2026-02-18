@@ -101,8 +101,8 @@ blueprint:
       description: |
         Additional manual bias applied to the computed offset **before rounding**.
         Use this if the valve still behaves undesirably after calibration:
-        - **Positive value** (e.g., +0.1...+1.0 °C): Makes the valve think it's **warmer** → **reduces** heating sooner.
-        - **Negative value** (e.g., -0.1...-1.0 °C): Makes the valve think it's **cooler** → **prolongs** heating.
+        - **Positive value** (e.g., +0.1..+1.0 °C): Makes the valve think it's **warmer** → **reduces** heating sooner.
+        - **Negative value** (e.g., -0.1..-1.0 °C): Makes the valve think it's **cooler** → **prolongs** heating.
         Recommended start: 0.0 °C. Adjust in small steps (±0.1 °C), observe behavior for a few cycles.
       default: 0.0
       selector:
