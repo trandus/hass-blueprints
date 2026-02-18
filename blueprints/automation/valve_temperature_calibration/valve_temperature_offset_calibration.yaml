@@ -155,7 +155,7 @@ condition:
   - condition: template
     value_template: |
       {% set last = state_attr(this.entity_id, 'last_triggered') %}
-      {{ (as_timestamp(now()) - as_timestamp(last or 0)) > min_interval }}
+      {{ (as_timestamp(now()) - as_timestamp(last, 0)) > min_interval }}
 
 action:
   - service: number.set_value
