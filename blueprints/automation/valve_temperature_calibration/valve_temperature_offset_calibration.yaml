@@ -5,7 +5,7 @@ blueprint:
     using the readings from an external room temperature sensor.
     The blueprint calculates the correct offset based on the difference between the
     valve's internal sensor and the actual room temperature, and then updates
-    the `number` entity that controls the valve’s local temperature offset.
+    the `number` entity that controls the valve' local temperature offset.
 
     Example use case:
       - `climate_entity`: climate.hama_valve_gerald_thermostat
@@ -20,7 +20,7 @@ blueprint:
       tends to stop heating too early or overheats even after calibration.
 
       - Positive value (e.g., +0.3 °C): The valve will assume the room is warmer → it reduces heating sooner.
-      - Negative value (e.g., −0.3 °C): The valve will assume the room is cooler → it prolongs heating.
+      - Negative value (e.g., -0.3 °C): The valve will assume the room is cooler → it prolongs heating.
 
   domain: automation
   source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml
@@ -42,7 +42,7 @@ blueprint:
     offset_number_entity:
       name: Temperature offset entity (number)
       description: |
-        Select the `number` entity that controls the valve’s temperature offset.
+        Select the `number` entity that controls the valve's temperature offset.
         It usually ends with `_local_temperature_offset` and is linked to the valve
         device. Example: `number.hama_valve_gerald_local_temperature_offset_2`.
       selector:
@@ -101,10 +101,8 @@ blueprint:
       description: |
         Additional manual bias applied to the computed offset **before rounding**.
         Use this if the valve still behaves undesirably after calibration:
-
-        - **Positive value** (e.g., +0.1…+1.0 °C): Makes the valve think it's **warmer** → **reduces** heating sooner.
-        - **Negative value** (e.g., −0.1…−1.0 °C): Makes the valve think it's **cooler** → **prolongs** heating.
-
+        - **Positive value** (e.g., +0.1...+1.0 °C): Makes the valve think it's **warmer** → **reduces** heating sooner.
+        - **Negative value** (e.g., -0.1...-1.0 °C): Makes the valve think it's **cooler** → **prolongs** heating.
         Recommended start: 0.0 °C. Adjust in small steps (±0.1 °C), observe behavior for a few cycles.
       default: 0.0
       selector:
