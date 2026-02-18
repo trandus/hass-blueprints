@@ -8,10 +8,10 @@ blueprint:
     the `number` entity that controls the valve’s local temperature offset.
 
     ⚙️ Example use case:
-      - `climate_entity`: climate.hama_valve_gerald_thermostat  
-      - `external_sensor`: sensor.lumi_gerald_temperature  
-      - `offset_number_entity`: number.hama_valve_gerald_local_temperature_offset_2  
-      - `rounding_step`: 1.0  
+      - `climate_entity`: climate.hama_valve_gerald_thermostat
+      - `external_sensor`: sensor.lumi_gerald_temperature
+      - `offset_number_entity`: number.hama_valve_gerald_local_temperature_offset_2
+      - `rounding_step`: 1.0
 
     This ensures that the TRV measures the same temperature as your external room sensor.
 
@@ -22,82 +22,89 @@ blueprint:
       - Positive value (e.g., +0.3 °C): The valve will assume the room is warmer → it reduces heating sooner.
       - Negative value (e.g., −0.3 °C): The valve will assume the room is cooler → it prolongs heating.
 
-    Reliability improvements:
-      - offset updates are skipped when source values are unavailable/invalid,
-      - offset write is skipped when calculated value has not changed meaningfully,
-      - calculated value is clamped to target `number` entity min/max range when available.
-
   domain: automation
   source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml
 
   input:
     climate_entity:
       name: Thermostatic valve (climate)
-      description: >
+      description: |
         Select the `climate` entity of your smart radiator valve (TRV).
-        This is the entity that controls the heating in Home Assistant,
-        for example: `climate.hama_valve_gerald_thermostat`.
+        This is the entity that controls the heating in Home Assistant, for example:
+        `climate.hama_valve_gerald_thermostat`.
       selector:
         entity:
-          domain: climate
+          domain:
+            - climate
+          reorder: false
+          multiple: false
 
     offset_number_entity:
       name: Temperature offset entity (number)
-      description: >
+      description: |
         Select the `number` entity that controls the valve’s temperature offset.
-        It usually ends with `_local_temperature_offset` and is linked to the valve device.
-        Example: `number.hama_valve_gerald_local_temperature_offset_2`.
+        It usually ends with `_local_temperature_offset` and is linked to the valve
+        device. Example: `number.hama_valve_gerald_local_temperature_offset_2`.
       selector:
         entity:
-          domain: number
+          domain:
+            - number
+          reorder: false
+          multiple: false
 
     external_sensor:
       name: External temperature sensor
-      description: >
+      description: |
         Select the temperature sensor that measures the actual room temperature.
         This should be a `sensor` entity that provides the correct ambient temperature,
         for example: `sensor.lumi_gerald_temperature`.
       selector:
         entity:
-          domain: sensor
-          device_class: temperature
+          domain:
+            - sensor
+          device_class:
+            - temperature
+          reorder: false
+          multiple: false
 
     min_interval:
       name: Minimum time between updates
-      description: >
-        The minimum amount of time (in seconds) that must pass before the offset
-        can be updated again. This prevents the valve from being recalibrated too often.
+      description: |
+        The minimum amount of time (in seconds) that must pass before the offset can
+        be updated again. This prevents the valve from being recalibrated too often.
         A typical value is 300 seconds (5 minutes).
       default: 300
       selector:
         number:
-          min: 30
-          max: 3600
-          step: 1
+          min: 30.0
+          max: 3600.0
+          step: 1.0
           mode: box
           unit_of_measurement: s
 
     rounding_step:
       name: Rounding step for offset value
-      description: >
+      description: |
         Define the step to which the calculated offset should be rounded.
         Use `0.5` for valves that support half-degree steps, or `1.0` for full degrees.
       default: 1.0
       selector:
         number:
           min: 0.1
-          max: 2
+          max: 2.0
           step: 0.1
           mode: box
-          unit_of_measurement: "°C"
+          unit_of_measurement: °C
 
     manual_correction:
       name: Manual correction (bias)
-      description: >
+      description: |
         Additional manual bias applied to the computed offset **before rounding**.
         Use this if the valve still behaves undesirably after calibration:
+
         - **Positive value** (e.g., +0.1…+1.0 °C): Makes the valve think it's **warmer** → **reduces** heating sooner.
         - **Negative value** (e.g., −0.1…−1.0 °C): Makes the valve think it's **cooler** → **prolongs** heating.
+
         Recommended start: 0.0 °C. Adjust in small steps (±0.1 °C), observe behavior for a few cycles.
       default: 0.0
       selector:
@@ -106,7 +113,7 @@ blueprint:
           max: 1.0
           step: 0.1
           mode: slider
-          unit_of_measurement: "°C"
+          unit_of_measurement: °C
 
 mode: single
 max_exceeded: silent
@@ -119,40 +126,23 @@ variables:
   rounding_step: !input rounding_step
   manual_correction: !input manual_correction
 
-  # Current offset value from the number entity
-  current_offset: >
+  current_offset: |
     {% if offset_entity %}
-      {{ states(offset_entity) | float(none) }}
+      {{ states(offset_entity) | float(0) }}
     {% else %}
-      {{ none }}
+      0
     {% endif %}
 
-  # Temperature reported by the valve (internal sensor)
-  current_temperature: >
-    {{ state_attr(climate_entity, 'current_temperature') | float(none) }}
+  current_temperature: |
+    {{ state_attr(climate_entity, 'current_temperature') | float(0) }}
 
-  # Temperature from the external room sensor
-  external_temperature: >
-    {{ states(external_sensor) | float(none) }}
+  external_temperature: |
+    {{ states(external_sensor) | float(0) }}
 
-  # Calculate new offset:
-  #   offset = [external - (valve_temperature - current_offset)] + manual_correction
-  # then round to the nearest rounding_step.
-  calculated_offset: >
+  calculated_offset: |
     {% set step = rounding_step | float(1) %}
-    {% if step <= 0 %}
-      {{ none }}
-    {% elif current_temperature is none or external_temperature is none or current_offset is none %}
-      {{ none }}
-    {% else %}
-      {% set raw = external_temperature - (current_temperature - current_offset) + (manual_correction | float(0)) %}
-      {% set rounded = ((raw / step) | round(0)) * step %}
-      {% set entity_min = state_attr(offset_entity, 'min') | float(none) %}
-      {% set entity_max = state_attr(offset_entity, 'max') | float(none) %}
-      {% set bounded_min = [rounded, entity_min] | max if entity_min is not none else rounded %}
-      {% set bounded = [bounded_min, entity_max] | min if entity_max is not none else bounded_min %}
-      {{ bounded }}
-    {% endif %}
+    {% set raw = external_temperature - (current_temperature - current_offset) + (manual_correction | float(0)) %}
+    {{ ((raw / step) | round(0)) * step }}
 
 trigger:
   - platform: state
@@ -165,13 +155,7 @@ condition:
   - condition: template
     value_template: "{{ offset_entity != '' }}"
   - condition: template
-    value_template: "{{ calculated_offset is not none }}"
-  - condition: template
-    value_template: >
-      {% set tolerance = (rounding_step | float(1)) / 2 %}
-      {{ current_offset is none or (calculated_offset - current_offset) | abs >= tolerance }}
-  - condition: template
-    value_template: >
+    value_template: |
       {% set last = state_attr(this.entity_id, 'last_triggered') %}
       {{ (as_timestamp(now()) - as_timestamp(last or 0)) > min_interval }}
 
