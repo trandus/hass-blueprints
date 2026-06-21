@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5] - 2026-06-21
+### Changed
+- Released `Periodic Low Battery Report` blueprint version `0.3.0`.
+- Added `include_invalid_state` for reporting `unavailable`, `unknown`, missing entities, and other non-numeric states with their actual values.
+- Preserved `include_unavailable` as a backward-compatible fallback; invalid states are included by default when neither option is specified.
+- Updated blueprint examples and documentation for the canonical `blueprints/automation/...` path.
+
 ## [0.4.4] - 2026-02-17
 ### Changed
 - Restructured the repository to a standard blueprint layout, moving all blueprints to `blueprints/automation/...`.

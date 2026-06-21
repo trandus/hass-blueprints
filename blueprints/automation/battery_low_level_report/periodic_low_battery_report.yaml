@@ -3,12 +3,14 @@ blueprint:
   description: |
     Send a periodic battery report (daily, weekly, or monthly) for any number of battery sensors.
 
-    Blueprint version: 0.2.0
+    Blueprint version: 0.3.0
 
     Each monitored sensor can have its own low-battery threshold in the range 0..100 (%).
     If a threshold is not provided for a specific sensor, the default threshold is 1% (<= 1%).
-    Sensors with an `unavailable` state are skipped by default and do not break report generation.
-    You can opt in per sensor to include `unavailable` state in low-battery report entries.
+    Invalid states (`unavailable`, `unknown`, missing entities, and other non-numeric values)
+    are included by default and shown with their actual state. Set `include_invalid_state`
+    to `false` per sensor to omit them. The older `include_unavailable` option remains
+    supported for backward compatibility when `include_invalid_state` is not specified.
 
     The report can be sent:
       - to one or more phone notification services (for example `notify.mobile_app_*`),
@@ -18,10 +20,10 @@ blueprint:
     Input format for `Monitored batteries with individual thresholds`:
       - battery_sensor: sensor.kitchen_remote_battery
         threshold: 5
-        include_unavailable: false
+        include_invalid_state: false
       - battery_sensor: sensor.bedroom_sensor_battery
         threshold: 1
-        include_unavailable: true
+        include_invalid_state: true
 
   domain: automation
   source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml
@@ -89,21 +91,25 @@ blueprint:
         Provide a YAML list where each item contains:
           - `battery_sensor`: battery sensor entity ID
           - `threshold`: optional threshold in % (0..100, step 1)
-          - `include_unavailable`: optional boolean, when `true` report includes `unavailable` state for this sensor
+          - `include_invalid_state`: optional boolean; when `true`, the report includes
+            `unavailable`, `unknown`, missing entities, and other non-numeric states
+          - `include_unavailable`: deprecated compatibility option used only when
+            `include_invalid_state` is not specified
 
         Example:
           - battery_sensor: sensor.kitchen_remote_battery
             threshold: 5
-            include_unavailable: false
+            include_invalid_state: false
           - battery_sensor: sensor.window_sensor_battery
             threshold: 1
-            include_unavailable: true
+            include_invalid_state: true
 
-        If threshold is missing, default 1% is used.
+        If threshold is missing, default 1% is used. If both state options are missing,
+        invalid states are included by default.
       default:
         - battery_sensor: sensor.example_battery
           threshold: 1
-          include_unavailable: false
+          include_invalid_state: true
       selector:
         object: {}
 
@@ -138,20 +144,22 @@ variables:
       {% set sensor_id = item.battery_sensor | string %}
       {% set sensor_name = state_attr(sensor_id, 'friendly_name') or sensor_id %}
       {% set sensor_state = states(sensor_id) %}
-      {% set include_unavailable = item.include_unavailable | default(false) %}
-      {% set battery_level = states(sensor_id) | float(none) %}
-      {% if sensor_state | lower == 'unavailable' %}
-        {% if include_unavailable %}
+      {% set include_invalid_state = item.include_invalid_state
+        if item.include_invalid_state is defined
+        else (item.include_unavailable if item.include_unavailable is defined else true) %}
+      {% if not is_number(sensor_state) %}
+        {% if include_invalid_state %}
           {% set namespace_data.items = namespace_data.items + [
             {
               'sensor': sensor_id,
               'name': sensor_name,
-              'level': 'unavailable',
-              'threshold': none
+              'state': sensor_state,
+              'invalid': true
             }
           ] %}
         {% endif %}
-      {% elif battery_level is not none %}
+      {% else %}
+        {% set battery_level = sensor_state | float %}
         {% set requested_threshold = item.threshold | default(1) | int(1) %}
         {% set threshold = [100, [0, requested_threshold] | max] | min %}
         {% if battery_level <= threshold %}
@@ -160,7 +168,8 @@ variables:
               'sensor': sensor_id,
               'name': sensor_name,
               'level': battery_level | round(0),
-              'threshold': threshold
+              'threshold': threshold,
+              'invalid': false
             }
           ] %}
         {% endif %}
@@ -171,8 +180,8 @@ variables:
   report_lines: >-
     {% if low_battery_entries | count > 0 %}
       {% for entry in low_battery_entries %}
-        {% if entry.level == 'unavailable' %}
-          - {{ entry.name }} ({{ entry.sensor }}): unavailable
+        {% if entry.invalid %}
+          - {{ entry.name }} ({{ entry.sensor }}): {{ entry.state }}
         {% else %}
           - {{ entry.name }} ({{ entry.sensor }}): {{ entry.level }}% (threshold <= {{ entry.threshold }}%)
         {% endif %}

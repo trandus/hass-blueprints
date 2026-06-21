@@ -21,8 +21,8 @@ affected blueprint files.
 ### Periodic low battery report
 - Sends reports on a daily, weekly, or monthly schedule.
 - Supports per-sensor battery thresholds in range 0..100% (default <= 1%).
-- Ignores `unavailable` battery sensors by default, so report generation is not interrupted by missing sensor state.
-- Can optionally include `unavailable` state per sensor in the low-battery report output.
+- Includes invalid states (`unavailable`, `unknown`, missing entities, and other non-numeric values) by default.
+- Can omit invalid states per sensor while retaining backward compatibility with `include_unavailable`.
 - Can notify phone(s), Home Assistant persistent notifications, or both.
 
 ## 📁 Repository structure
@@ -45,7 +45,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 | Blueprint | Version | File | Download link | Description |
 | --- | --- | --- | --- | --- |
 | Controller - IKEA E2201 RODRET Dimmer | 2025.03.20c (modified fork) | `ikea_e2201_rodret_dimmer.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/controller_ikea_e2201/ikea_e2201_rodret_dimmer.yaml) | Controller automation for IKEA RODRET (E2201) with short/long/release/double actions, based on and modified from EPMatt's Awesome HA Blueprints. |
-| Periodic low battery report | 0.2.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds and optional phone/persistent notifications. |
+| Periodic low battery report | 0.3.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds, invalid-state reporting, and optional phone/persistent notifications. |
 | Valve temperature offset calibration | 0.2.0 | `valve_temperature_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
 
 ## 📦 HACS installation (repository)
@@ -91,7 +91,8 @@ The blueprint requires the following inputs:
 5. **Monitored batteries with individual thresholds** – provide a YAML list of battery sensors, each with its own optional settings.
    - `battery_sensor` – sensor entity with battery level.
    - `threshold` – value from `0` to `100` (%), step `1`; if not provided, default threshold `1` is used (`<= 1%`).
-   - `include_unavailable` – optional boolean (`true`/`false`); when set to `true`, a sensor in `unavailable` state is included in the report message.
+   - `include_invalid_state` – optional boolean (`true`/`false`); defaults to `true` and controls reporting of `unavailable`, `unknown`, missing entities, and other non-numeric states.
+   - `include_unavailable` – deprecated compatibility option, used only when `include_invalid_state` is absent.
 6. **Phone notification action(s)** – optional phone notification action(s), usually `notify.mobile_app_*`.
 7. **Send Home Assistant persistent notification** – if enabled, creates a persistent notification inside Home Assistant.
 
@@ -100,15 +101,15 @@ Example configuration for monitored batteries:
 ```yaml
 - battery_sensor: sensor.kitchen_remote_battery
   threshold: 5
-  include_unavailable: false
+  include_invalid_state: false
 - battery_sensor: sensor.window_sensor_battery
   threshold: 1
-  include_unavailable: true
+  include_invalid_state: true
 ```
 
 The report message includes either:
 - a list of sensors with battery levels below or equal to each sensor threshold,
-- optionally (per sensor) entries for sensors currently in `unavailable` state,
+- entries with the actual invalid state when enabled for a sensor,
 - or a single line stating that no low battery levels were detected.
 
 ### Valve temperature offset calibration
