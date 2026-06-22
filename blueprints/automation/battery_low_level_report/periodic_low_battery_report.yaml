@@ -210,6 +210,8 @@ condition:
       {% else %}
         false
       {% endif %}
+  - condition: template
+    value_template: "{{ low_battery_entries | count > 0 }}"
 
 action:
   - choose:
