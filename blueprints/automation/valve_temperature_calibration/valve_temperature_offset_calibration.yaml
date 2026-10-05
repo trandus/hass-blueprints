@@ -6,6 +6,8 @@ blueprint:
     The blueprint calculates the correct offset based on the difference between the
     valve's internal sensor and the actual room temperature, and then updates
     the `number` entity that controls the valve' local temperature offset.
+    Calibration is skipped when a source reading is unavailable or invalid, or when
+    the calculated offset is outside the target number entity's supported range or step.
 
     Example use case:
       - `climate_entity`: climate.hama_valve_gerald_thermostat
@@ -152,6 +154,28 @@ trigger:
 condition:
   - condition: template
     value_template: "{{ offset_entity != '' }}"
+  - condition: template
+    value_template: |
+      {{ is_number(states(offset_entity))
+         and is_number(state_attr(climate_entity, 'current_temperature'))
+         and is_number(states(external_sensor)) }}
+  - condition: template
+    value_template: |
+      {{ is_number(state_attr(offset_entity, 'min'))
+         and is_number(state_attr(offset_entity, 'max'))
+         and is_number(state_attr(offset_entity, 'step'))
+         and (state_attr(offset_entity, 'step') | float(0)) > 0 }}
+  - condition: template
+    value_template: |
+      {% set value = calculated_offset | float(0) %}
+      {% set minimum = state_attr(offset_entity, 'min') | float(0) %}
+      {% set maximum = state_attr(offset_entity, 'max') | float(0) %}
+      {% set target_step = state_attr(offset_entity, 'step') | float(0) %}
+      {% set steps_from_minimum = (value - minimum) / target_step if target_step > 0 else -1 %}
+      {{ is_number(calculated_offset)
+         and target_step > 0
+         and minimum <= value <= maximum
+         and ((steps_from_minimum - (steps_from_minimum | round(0))) | abs) < 0.000001 }}
   - condition: template
     value_template: |
       {% set last = state_attr(this.entity_id, 'last_triggered') %}
