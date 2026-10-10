@@ -3,11 +3,24 @@ blueprint:
   description: |
     Automatically calibrate the temperature offset of a smart radiator valve (TRV)
     using the readings from an external room temperature sensor.
-    The blueprint calculates the correct offset based on the difference between the
-    valve's internal sensor and the actual room temperature, and then updates
-    the `number` entity that controls the valve' local temperature offset.
-    Calibration is skipped when a source reading is unavailable or invalid, or when
-    the calculated offset is outside the target number entity's supported range or step.
+    Only use this blueprint with valves whose `current_temperature` reports the
+    temperature before offset correction. The calculation is:
+    room temperature - valve temperature + manual_correction.
+    The current offset is used only to check whether a write is needed.
+    The result is rounded to `rounding_step`, then clamped to the offset number
+    entity's min/max limits without rounding again. For limits of -2.5 to +2.5 °C,
+    rounded results of -3 and +3 °C become -2.5 and +2.5 °C.
+    Calibration is skipped when readings or limits are unavailable/invalid, the
+    entity step is invalid, or the result does not match that step.
+
+    Temperature changes and a periodic check every 30 seconds recalculate using
+    current readings. Each automation has its own `min_interval` between attempts
+    to write a changed offset, including failed attempts. A pending correction is
+    evaluated again on the first periodic check after the interval, also after
+    automation reloads or entity recovery. The automation must be enabled and idle.
+    Differences of at most 0.000001 °C are skipped before actions start and do not
+    restart the interval. Manual edits to the offset are temporary: the next
+    eligible recalculation can overwrite them. Use `manual_correction` for a bias.
 
     Example use case:
       - `climate_entity`: climate.hama_valve_gerald_thermostat
@@ -15,7 +28,8 @@ blueprint:
       - `offset_number_entity`: number.hama_valve_gerald_local_temperature_offset_2
       - `rounding_step`: 1.0
 
-    This ensures that the TRV measures the same temperature as your external room sensor.
+    The supported offset range and rounding can limit how closely the corrected
+    valve temperature matches the external room sensor.
 
     Manual correction:
       Use the **manual_correction** slider to bias the calculated offset in cases where the valve
@@ -72,8 +86,10 @@ blueprint:
     min_interval:
       name: Minimum time between updates
       description: |
-        The minimum amount of time (in seconds) that must pass before the offset can
-        be updated again. This prevents the valve from being recalibrated too often.
+        Minimum time (in seconds) between attempts to write a changed offset for
+        this automation, including failed writes. At least this much time must pass.
+        Unchanged values and invalid readings do not restart the interval.
+        Skipped corrections are checked again every 30 seconds using current readings.
         A typical value is 300 seconds (5 minutes).
       default: 300
       selector:
@@ -88,7 +104,8 @@ blueprint:
       name: Rounding step for offset value
       description: |
         Define the step to which the calculated offset should be rounded.
-        Use `0.5` for valves that support half-degree steps, or `1.0` for full degrees.
+        Use `0.5` for half-degree rounding, or `1.0` for full degrees. Results must
+        also match the offset entity's step. Min/max clamping happens after rounding.
       default: 1.0
       selector:
         number:
@@ -127,22 +144,27 @@ variables:
   manual_correction: !input manual_correction
 
   current_offset: |
-    {% if offset_entity %}
-      {{ states(offset_entity) | float(0) }}
-    {% else %}
-      0
-    {% endif %}
+    {{ states(offset_entity) | float(none) }}
 
   current_temperature: |
-    {{ state_attr(climate_entity, 'current_temperature') | float(0) }}
+    {{ state_attr(climate_entity, 'current_temperature') | float(none) }}
 
   external_temperature: |
-    {{ states(external_sensor) | float(0) }}
+    {{ states(external_sensor) | float(none) }}
 
   calculated_offset: |
-    {% set step = rounding_step | float(1) %}
-    {% set raw = external_temperature - (current_temperature - current_offset) + (manual_correction | float(0)) %}
-    {{ ((raw / step) | round(0)) * step }}
+    {% set step = rounding_step | float(none) %}
+    {% set minimum = state_attr(offset_entity, 'min') | float(none) %}
+    {% set maximum = state_attr(offset_entity, 'max') | float(none) %}
+    {% if is_number(current_temperature) and is_number(external_temperature)
+          and is_number(manual_correction) and is_number(step) and step > 0
+          and is_number(minimum) and is_number(maximum) and minimum <= maximum %}
+      {% set raw = external_temperature - current_temperature + (manual_correction | float) %}
+      {% set rounded = ((raw / step) | round(0)) * step %}
+      {{ [minimum, [rounded, maximum] | min] | max }}
+    {% else %}
+      {{ none }}
+    {% endif %}
 
 trigger:
   - platform: state
@@ -150,6 +172,8 @@ trigger:
   - platform: state
     entity_id: !input climate_entity
     attribute: current_temperature
+  - platform: time_pattern
+    seconds: "/30"
 
 condition:
   - condition: template
@@ -157,6 +181,7 @@ condition:
   - condition: template
     value_template: |
       {{ is_number(states(offset_entity))
+         and has_value(climate_entity)
          and is_number(state_attr(climate_entity, 'current_temperature'))
          and is_number(states(external_sensor)) }}
   - condition: template
@@ -164,6 +189,7 @@ condition:
       {{ is_number(state_attr(offset_entity, 'min'))
          and is_number(state_attr(offset_entity, 'max'))
          and is_number(state_attr(offset_entity, 'step'))
+         and (state_attr(offset_entity, 'min') | float) <= (state_attr(offset_entity, 'max') | float)
          and (state_attr(offset_entity, 'step') | float(0)) > 0 }}
   - condition: template
     value_template: |
@@ -178,8 +204,12 @@ condition:
          and ((steps_from_minimum - (steps_from_minimum | round(0))) | abs) < 0.000001 }}
   - condition: template
     value_template: |
+      {{ is_number(calculated_offset) and is_number(current_offset)
+         and ((calculated_offset | float) - (current_offset | float)) | abs > 0.000001 }}
+  - condition: template
+    value_template: |
       {% set last = state_attr(this.entity_id, 'last_triggered') %}
-      {{ (as_timestamp(now()) - as_timestamp(last, 0)) > min_interval }}
+      {{ last is none or (as_timestamp(now()) - as_timestamp(last, 0)) >= min_interval }}
 
 action:
   - service: number.set_value

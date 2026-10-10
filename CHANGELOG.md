@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+### Changed
+- Corrected valve calibration for valves reporting temperature before offset correction: `external temperature - valve temperature + manual correction`, without accumulating the current offset.
+- Rounded to the configured step before clamping to the offset entity limits, without rounding the clamped result again; retained reading, range, and device-step validation.
+- Added a 30-second periodic evaluation using current readings to retry corrections skipped during the interval, after reloads, or while entities were unavailable.
+- Applied the minimum interval independently per automation between changed-offset write attempts, including failed writes, allowing the next attempt at the interval boundary.
+- Moved the unchanged-offset check before actions so differences of at most `0.000001` °C neither cause writes nor restart the interval.
+- Documented supported valve temperature reporting, retry behavior, and the temporary nature of manual offset changes.
+
 ## [0.4.5] - 2026-06-21
 ### Changed
 - Released `Periodic Low Battery Report` blueprint version `0.3.0`.

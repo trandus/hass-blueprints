@@ -10,13 +10,14 @@ affected blueprint files.
 ## 🚀 Features
 
 ### Valve temperature offset calibration
-- automatically calculates the offset value from the difference between the external sensor and the valve's built-in sensor,
+- supports valves whose `current_temperature` reports the temperature before the offset is applied,
+- calculates `external_sensor_temperature - valve_temperature + manual_correction`, independently of the current offset,
 - applies an optional manual correction (bias) before rounding so you can fine-tune how aggressively the valve heats,
-- rounds the offset to the increment supported by the device (for example `0.5` °C or `1.0` °C),
+- rounds to the configured `rounding_step`, then clamps to the offset entity's `min`/`max` without rounding again,
 - writes the calculated offset to the corresponding `number` entity (`*_local_temperature_offset`) of the device,
-- includes a basic time lock to limit how often the value is updated (minimum every 5 minutes by default),
-- skips updates when source sensor values are unavailable/invalid and avoids writing unchanged offset values,
-- clamps calculated offset to the target entity min/max range when those limits are exposed by the integration.
+- checks temperature changes and re-evaluates current readings every 30 seconds to retry skipped updates,
+- limits changed-offset write attempts independently for each automation (300 seconds by default), including failed writes,
+- skips unavailable/invalid readings, invalid entity limits/step, values incompatible with the device step, and changes of at most `0.000001` °C; these skips do not restart the interval.
 
 ### Periodic low battery report
 - Sends reports on a daily, weekly, or monthly schedule.
@@ -118,21 +119,25 @@ The blueprint requires the following inputs:
 
 1. **Thermostatic valve** – select the `climate` entity that represents the valve you want to calibrate. You can find it under `Settings` → `Devices & Services`, open the device for your valve, and copy the entity ID displayed next to the climate entity (for example, `climate.living_room_valve`).
 2. **External temperature sensor** – choose a `sensor` entity that reports the actual room temperature. Look it up on the `Settings` → `Devices & Services` page or via the `Settings` → `Devices` list, then copy the entity ID (for example, `sensor.living_room_temperature`). Make sure the sensor updates regularly and uses the `temperature` device class.
-3. **Offset entity** – select the `number` entity that stores the offset value for the valve. On the valve's device page, look for an entity with a name similar to `Local temperature offset`. If there are multiple offset entities, choose the one linked to the climate entity you are calibrating. You can confirm the entity ID (for example, `number.living_room_valve_local_temperature_offset`) in the `Developer Tools` → `States` view.
-4. **Minimum interval between updates** – set the number of seconds that must pass before a new offset can be written (defaults to 300 seconds). This prevents rapid changes that could spam the device. If you are unsure, keep the default value or increase it if your device reacts slowly to adjustments. The automation will ignore triggers that occur more frequently than this interval.
-5. **Rounding step** – define the increment that the calculated offset should be rounded to (default `1.0`). Open the offset entity in the UI and check the `Step` attribute to see what increments the device supports. Many valves only allow full degrees (`1.0`), while others support finer steps such as `0.5` or `0.1`. Enter the same value here to avoid rejected updates.
+3. **Offset entity** – select the `number` entity that stores the offset value for the valve. On the valve's device page, look for an entity with a name similar to `Local temperature offset`. If there are multiple offset entities, choose the one linked to the climate entity you are calibrating. Open its entity details to confirm the entity ID (for example, `number.living_room_valve_local_temperature_offset`).
+4. **Minimum interval between updates** – set the minimum number of seconds between attempts to write a changed offset (defaults to 300 seconds). A new attempt is allowed when at least this interval has elapsed. Failed writes also start the interval. Skipped evaluations, including unchanged values, do not restart it. Changes during the interval are re-evaluated from current readings on the first periodic check after it ends.
+5. **Rounding step** – define the increment that the calculated offset should be rounded to (default `1.0`). Check the offset entity's supported increments on the valve's device page or in the device documentation. Choose a rounding step compatible with those increments, such as `1.0` for whole degrees or `0.5` for half degrees. The final value must also fit the device's step after clamping to its limits.
 6. **Manual correction (bias)** – optionally add a positive or negative bias (default `0.0`). Positive values (for example `+0.3`) make the valve assume the room is warmer and therefore reduce heating sooner. Negative values (for example `-0.3`) make the valve assume the room is cooler and therefore prolong heating. Adjust in small increments and observe the results for a few heating cycles.
 
-> **Tip:** After saving the automation, you can monitor the offset entity in `Developer Tools` → `States` to verify that the value is being updated according to the configured interval and step.
+> **Tip:** After saving the automation, monitor the offset entity on the valve's device page. Manual changes to the offset are temporary: the next eligible evaluation restores the calculated value if it differs.
 
 ## ℹ️ How it works
 
-The automation performs a straightforward calculation:
+Use this blueprint only with valves whose `current_temperature` is the built-in sensor reading before offset correction. It calculates an absolute offset; the current offset is used only to decide whether a write is needed:
 
 ```
-raw_offset = external_sensor_temperature - (valve_temperature - current_offset)
-adjusted_offset = raw_offset + manual_correction
-new_offset = round_to_step(adjusted_offset, rounding_step)
+raw_offset = external_sensor_temperature - valve_temperature + manual_correction
+rounded_offset = round_to_step(raw_offset, rounding_step)
+new_offset = clamp(rounded_offset, offset_entity_min, offset_entity_max)
 ```
 
-The result is stored in the offset entity. The automation waits for the specified interval before attempting the next update to limit the number of write operations.
+Clamping happens after rounding, with no second rounding. For example, rounded values of `+3` °C and `-3` °C become `+2.5` °C and `-2.5` °C for an entity limited to that range. Readings and the current offset must be numeric, the entity limits must be valid, and its step must be positive. The final value must lie on the entity's supported step grid; invalid data blocks the write instead of substituting zero.
+
+Temperature changes trigger an evaluation, and a [time pattern trigger](https://www.home-assistant.io/docs/automation/trigger/#time-pattern-trigger) checks every 30 seconds using current entity states. A write requires a difference greater than `0.000001` °C and at least `min_interval` seconds since that automation's previous changed-offset write attempt. These checks run before the actions, so an unchanged offset does not start or extend the interval. A failed write starts the interval because it is still a write attempt.
+
+With the automation enabled, valid data, and no action already running, a correction skipped during the interval is considered again on the first periodic check after the interval ends, even without another temperature change. Periodic checks also resume evaluations after automation reloads or recovery of unavailable entities. Each automation has its own interval, and [`mode: single`](https://www.home-assistant.io/docs/automation/modes/) prevents overlapping action runs within an instance.
