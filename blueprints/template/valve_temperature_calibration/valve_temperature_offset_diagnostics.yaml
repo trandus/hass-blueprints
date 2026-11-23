@@ -1,0 +1,108 @@
+blueprint:
+  name: Valve Temperature Offset Diagnostics
+  description: >-
+    Expose the readings published by one Valve Temperature Offset Calibration
+    automation. Use the same offset number entity in both blueprints. Each
+    output ID identifies a sensor created by this blueprint.
+  domain: template
+  source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/template/valve_temperature_calibration/valve_temperature_offset_diagnostics.yaml
+  homeassistant:
+    min_version: "2026.11.2"
+  input:
+    room_name:
+      name: Room display name
+      selector:
+        text:
+    offset_number_entity:
+      name: Valve offset entity used by the controller
+      selector:
+        entity:
+          domain: number
+    output_entities:
+      name: Diagnostic entity IDs
+      description: Use full sensor.* IDs. Reuse the IDs of existing sensors to keep their history.
+      input:
+        calibration_entity:
+          name: Calibration offset sensor ID
+          selector:
+            text:
+        regulation_entity:
+          name: Regulation offset sensor ID
+          selector:
+            text:
+        total_entity:
+          name: Requested total offset sensor ID
+          selector:
+            text:
+        calibrated_temperature_entity:
+          name: Calibrated valve temperature sensor ID
+          selector:
+            text:
+        raw_temperature_entity:
+          name: Estimated raw valve temperature sensor ID
+          selector:
+            text:
+        target_temperature_entity:
+          name: Valve target temperature sensor ID
+          selector:
+            text:
+
+triggers:
+  - trigger: event
+    event_type: trandus_valve_offset_diagnostics
+    event_data:
+      offset_entity: !input offset_number_entity
+
+trigger_variables:
+  room_name: !input room_name
+
+variables:
+  sample: "{{ trigger.event.data.get('sample') or {} }}"
+
+sensor:
+  - name: "{{ room_name }} Calibration Offset"
+    unique_id: !input calibration_entity
+    default_entity_id: !input calibration_entity
+    unit_of_measurement: °C
+    state_class: measurement
+    state: "{{ sample.get('calibration_offset') }}"
+    attributes:
+      sample: "{{ trigger.event.data.get('sample') }}"
+      last_offset_attempt: "{{ trigger.event.data.get('last_offset_attempt') }}"
+
+  - name: "{{ room_name }} Regulation Offset"
+    unique_id: !input regulation_entity
+    default_entity_id: !input regulation_entity
+    unit_of_measurement: °C
+    state_class: measurement
+    state: "{{ sample.get('regulation_offset') }}"
+
+  - name: "{{ room_name }} Total Offset (Requested)"
+    unique_id: !input total_entity
+    default_entity_id: !input total_entity
+    unit_of_measurement: °C
+    state_class: measurement
+    state: "{{ sample.get('total_offset') }}"
+    attributes:
+      applied_total_offset: "{{ sample.get('applied_total_offset') }}"
+
+  - name: "{{ room_name }} Valve Temperature (Calibrated)"
+    unique_id: !input calibrated_temperature_entity
+    default_entity_id: !input calibrated_temperature_entity
+    unit_of_measurement: °C
+    state_class: measurement
+    state: "{{ sample.get('calibrated_temperature') }}"
+
+  - name: "{{ room_name }} Valve Temperature (Estimated Raw)"
+    unique_id: !input raw_temperature_entity
+    default_entity_id: !input raw_temperature_entity
+    unit_of_measurement: °C
+    state_class: measurement
+    state: "{{ sample.get('raw_temperature') }}"
+
+  - name: "{{ room_name }} Target Temperature"
+    unique_id: !input target_temperature_entity
+    default_entity_id: !input target_temperature_entity
+    unit_of_measurement: °C
+    state_class: measurement
+    state: "{{ sample.get('target_temperature') }}"

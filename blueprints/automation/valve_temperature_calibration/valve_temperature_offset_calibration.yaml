@@ -13,6 +13,11 @@ blueprint:
     where its range permits. The displayed valve temperature may differ from
     the room temperature during regulation. Room regulation requires Celsius.
 
+    Optionally publish the calculation for the Valve Temperature Offset
+    Diagnostics template blueprint. The regulator does not read its sensors.
+    An Input Datetime with both date and time stores the last write attempt
+    separately from periodic diagnostic updates and survives restarts.
+
     Without a helper, the blueprint only calibrates against the room sensor.
   domain: automation
   source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml
@@ -154,6 +159,27 @@ blueprint:
           step: 0.1
           unit_of_measurement: °C
 
+    offset_attempt_helper:
+      name: Offset write timestamp helper (optional)
+      description: |
+        Select a dedicated Input Datetime with date and time and no initial
+        value. This allows periodic diagnostics without changing write timing.
+        Without it, the automation uses the time of its last action run.
+      default: ""
+      selector:
+        entity:
+          domain: input_datetime
+
+    publish_offset_diagnostics:
+      name: Publish offset diagnostics
+      description: |
+        Emit the offset calculation for the companion template blueprint.
+        With a timestamp helper, publish a settled sample on the periodic check
+        even when the valve needs no new write.
+      default: false
+      selector:
+        boolean:
+
 mode: single
 max_exceeded: silent
 
@@ -162,6 +188,8 @@ variables:
   external_sensor: !input external_sensor
   offset_entity: !input offset_number_entity
   heat_demand_helper: !input heat_demand_helper
+  offset_attempt_helper: !input offset_attempt_helper
+  publish_offset_diagnostics: !input publish_offset_diagnostics
   room_hysteresis: !input room_hysteresis
   valve_margin: !input valve_margin
   min_interval: !input min_interval
@@ -178,8 +206,21 @@ variables:
   offset_min: "{{ state_attr(offset_entity, 'min') | float(none) }}"
   offset_max: "{{ state_attr(offset_entity, 'max') | float(none) }}"
   offset_step: "{{ state_attr(offset_entity, 'step') | float(none) }}"
+
+  # A write and its corrected temperature report can arrive separately.
+  offset_age: >-
+    {{ as_timestamp(now()) - as_timestamp(states[offset_entity].last_changed)
+       if is_number(current_offset) else none }}
+  offset_report_settled: >-
+    {{ not reported_temperature_includes_offset
+       or (is_number(offset_age) and offset_age >= 30 and has_value(climate_entity)
+           and (states[climate_entity].last_reported | default(states[climate_entity].last_updated))
+               >= states[offset_entity].last_changed) }}
+  offset_report_timed_out: >-
+    {{ is_number(offset_age) and offset_age >= 120 and not offset_report_settled }}
   raw_temperature: >-
-    {% if is_number(reported_temperature) and
+    {% if has_value(climate_entity) and is_number(reported_temperature)
+          and not (heat_demand_helper != '' and offset_report_timed_out) and
           (not reported_temperature_includes_offset or is_number(current_offset)) %}
       {{ reported_temperature - (current_offset if reported_temperature_includes_offset else 0) }}
     {% else %}
@@ -190,17 +231,19 @@ variables:
   regulating: "{{ heat_demand_helper != '' }}"
   demand_state: "{{ states(heat_demand_helper) if regulating else 'off' }}"
   was_demanding: "{{ demand_state == 'on' }}"
-  regulator_ready: >-
-    {{ regulating and demand_state in ['on', 'off'] and climate_mode == 'heat'
-       and is_number(target_temperature) and is_number(room_temperature)
-       and is_number(raw_temperature)
-       and state_attr(climate_entity, 'temperature_unit') == '°C'
+  celsius_readings: >-
+    {{ state_attr(climate_entity, 'temperature_unit') == '°C'
        and state_attr(external_sensor, 'unit_of_measurement') == '°C'
        and state_attr(offset_entity, 'unit_of_measurement') == '°C' }}
+  room_control_ready: >-
+    {{ regulating and demand_state in ['on', 'off'] and climate_mode == 'heat'
+       and is_number(target_temperature) and is_number(room_temperature)
+       and celsius_readings }}
+  regulator_ready: "{{ room_control_ready and is_number(raw_temperature) }}"
   desired_demand: >-
     {% if climate_mode == 'off' %}
       {{ false }}
-    {% elif regulator_ready %}
+    {% elif room_control_ready %}
       {{ room_temperature < target_temperature and
          (was_demanding or room_temperature <= target_temperature - room_hysteresis) }}
     {% else %}
@@ -208,25 +251,43 @@ variables:
     {% endif %}
   phase_changed: "{{ desired_demand != was_demanding }}"
 
-  # Project the desired valve reading onto the legal offset values.
-  calculated_offset: >-
-    {% if not (is_number(current_offset) and is_number(offset_min) and
-              is_number(offset_max) and is_number(offset_step) and
-              offset_step > 0 and offset_max >= offset_min) %}
+  grid_ready: >-
+    {{ is_number(offset_min) and is_number(offset_max) and is_number(offset_step)
+       and offset_step > 0 and offset_max >= offset_min }}
+  last_offset_index: >-
+    {{ ((((offset_max - offset_min) / offset_step) + 0.000001) | round(0, 'floor'))
+       if grid_ready else none }}
+  calibrated_room_temperature: >-
+    {{ room_temperature + manual_correction if is_number(room_temperature) else none }}
+
+  # Baseline calibration is the closest supported offset to align the readings.
+  calibration_offset: >-
+    {% if grid_ready and (not regulating or celsius_readings)
+          and is_number(raw_temperature) and is_number(calibrated_room_temperature) %}
+      {% set steps = (calibrated_room_temperature - raw_temperature - offset_min) / offset_step %}
+      {% set index = [0, [steps | round(0), last_offset_index] | min] | max %}
+      {{ (offset_min + index * offset_step) | round(6) }}
+    {% else %}
+      {{ none }}
+    {% endif %}
+
+  # Choose the hardware offset required for this phase. Directional rounding
+  # preserves the requested valve margin where the offset range permits it.
+  phase_offset: >-
+    {% if not (is_number(current_offset) and grid_ready) %}
       {{ none }}
     {% elif regulating %}
       {% if regulator_ready %}
-        {% set baseline = room_temperature + manual_correction %}
-        {% set reading = [baseline, target_temperature - valve_margin] | min if desired_demand
-                         else [baseline, target_temperature + valve_margin] | max %}
+        {% set reading = [calibrated_room_temperature, target_temperature - valve_margin] | min
+                         if desired_demand
+                         else [calibrated_room_temperature, target_temperature + valve_margin] | max %}
         {% set steps = (reading - raw_temperature - offset_min) / offset_step %}
         {% set index = (steps + 0.000001) | round(0, 'floor') if desired_demand
                        else (steps - 0.000001) | round(0, 'ceil') %}
       {% else %}
         {% set index = ((0 - offset_min) / offset_step) | round(0) %}
       {% endif %}
-      {% set last_index = (((offset_max - offset_min) / offset_step) + 0.000001) | round(0, 'floor') %}
-      {{ (offset_min + [0, [index, last_index] | min] | max * offset_step) | round(6) }}
+      {{ (offset_min + [0, [index, last_offset_index] | min] | max * offset_step) | round(6) }}
     {% elif has_value(climate_entity) and is_number(raw_temperature)
             and is_number(room_temperature) and rounding_step > 0 %}
       {% set value = ((room_temperature - raw_temperature + manual_correction) / rounding_step)
@@ -237,18 +298,57 @@ variables:
     {% else %}
       {{ none }}
     {% endif %}
+  regulation_offset: >-
+    {{ (phase_offset - calibration_offset) | round(6)
+       if is_number(phase_offset) and is_number(calibration_offset) else none }}
+  calculated_offset: >-
+    {{ (calibration_offset + regulation_offset) | round(6)
+       if is_number(regulation_offset) else phase_offset }}
 
-  # An offset report can precede the corrected temperature report from the valve.
-  # Wait through that window before reusing the pair for another calculation.
+  # Track write attempts independently of diagnostic-only runs.
+  timestamp_helper_ready: >-
+    {{ offset_attempt_helper != '' and has_value(offset_attempt_helper)
+       and state_attr(offset_attempt_helper, 'has_date')
+       and state_attr(offset_attempt_helper, 'has_time')
+       and is_number(state_attr(offset_attempt_helper, 'timestamp')) }}
+  last_offset_attempt: >-
+    {{ state_attr(offset_attempt_helper, 'timestamp') | float
+       if timestamp_helper_ready
+       else as_timestamp(this.attributes.get('last_triggered'), 0) }}
   attempt_age: >-
-    {{ as_timestamp(now()) - as_timestamp(this.attributes.get('last_triggered'), 0) }}
+    {{ as_timestamp(now()) - last_offset_attempt }}
   offset_settled: >-
     {{ not (regulating and reported_temperature_includes_offset and is_number(current_offset))
-       or as_timestamp(now()) - as_timestamp(states[offset_entity].last_changed, 0) >= 30 }}
+       or (offset_age >= 30 and (not regulator_ready or offset_report_settled)) }}
   update_demand: "{{ phase_changed and offset_settled and attempt_age >= 30 }}"
   update_offset: >-
     {{ is_number(calculated_offset) and (calculated_offset - current_offset) | abs > 0.000001
        and offset_settled and attempt_age >= (30 if phase_changed else min_interval) }}
+
+  # Hold the previous diagnostic sample when the two Zigbee reports are in flight.
+  # The periodic trigger also covers identical temperature reports.
+  sample_ready: >-
+    {{ publish_offset_diagnostics and (not is_number(raw_temperature) or
+       (offset_report_settled and as_timestamp(now())
+        - as_timestamp(states[climate_entity].last_updated) >= 2)) }}
+  publish_diagnostics: >-
+    {{ sample_ready and (timestamp_helper_ready or update_offset or update_demand) }}
+  attempt_timestamp: "{{ as_timestamp(now()) | int if update_offset else last_offset_attempt }}"
+  sample: >-
+    {% if publish_diagnostics %}
+      {{ dict(calibration_offset=calibration_offset,
+              regulation_offset=regulation_offset,
+              total_offset=calculated_offset,
+              applied_total_offset=current_offset,
+              raw_temperature=raw_temperature,
+              calibrated_temperature=(raw_temperature + calibration_offset) | round(1)
+                                     if is_number(calibration_offset) else none,
+              target_temperature=target_temperature,
+              heat_demand=desired_demand,
+              hvac_action=state_attr(climate_entity, 'hvac_action')) }}
+    {% else %}
+      {{ none }}
+    {% endif %}
 
 trigger:
   - platform: state
@@ -263,7 +363,7 @@ trigger:
 
 condition:
   - condition: template
-    value_template: "{{ update_demand or update_offset }}"
+    value_template: "{{ update_demand or update_offset or publish_diagnostics }}"
 
 action:
   - if:
@@ -277,8 +377,27 @@ action:
       - condition: template
         value_template: "{{ update_offset }}"
     then:
+      # Keep the attempt time even when the valve rejects a write.
+      - if:
+          - condition: template
+            value_template: "{{ timestamp_helper_ready }}"
+        then:
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: "{{ offset_attempt_helper }}"
+            data:
+              timestamp: "{{ attempt_timestamp }}"
       - service: number.set_value
         target:
           entity_id: "{{ offset_entity }}"
         data:
           value: "{{ calculated_offset }}"
+  - if:
+      - condition: template
+        value_template: "{{ publish_diagnostics }}"
+    then:
+      - event: trandus_valve_offset_diagnostics
+        event_data:
+          offset_entity: "{{ offset_entity }}"
+          sample: "{{ sample }}"
+          last_offset_attempt: "{{ attempt_timestamp }}"

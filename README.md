@@ -30,16 +30,17 @@ affected blueprint files.
 
 ```
 blueprints/
-└── automation/
-    ├── battery_low_level_report/
-    │   └── periodic_low_battery_report.yaml
-    ├── controller_ikea_e2201/
-    │   └── ikea_e2201_rodret_dimmer.yaml
+├── automation/
+│   ├── battery_low_level_report/
+│   │   └── periodic_low_battery_report.yaml
+│   ├── controller_ikea_e2201/
+│   │   └── ikea_e2201_rodret_dimmer.yaml
+│   └── valve_temperature_calibration/
+│       └── valve_temperature_offset_calibration.yaml
+└── template/
     └── valve_temperature_calibration/
-        └── valve_temperature_offset_calibration.yaml
+        └── valve_temperature_offset_diagnostics.yaml
 ```
-
-If new blueprints are added in the future, each will be stored in its own subdirectory under `blueprints/automation/`.
 
 ## 🗂 Blueprint catalog
 
@@ -48,6 +49,7 @@ If new blueprints are added in the future, each will be stored in its own subdir
 | Controller - IKEA E2201 RODRET Dimmer | 2025.03.20c (modified fork) | `ikea_e2201_rodret_dimmer.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/controller_ikea_e2201/ikea_e2201_rodret_dimmer.yaml) | Controller automation for IKEA RODRET (E2201) with short/long/release/double actions, based on and modified from EPMatt's Awesome HA Blueprints. |
 | Periodic low battery report | 0.3.0 | `periodic_low_battery_report.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/battery_low_level_report/periodic_low_battery_report.yaml) | Sends a daily/weekly/monthly low-battery report with per-sensor thresholds, invalid-state reporting, and optional phone/persistent notifications. |
 | Valve temperature offset calibration | 0.2.0 | `valve_temperature_offset_calibration.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml) | Keeps the valve calibration aligned with an external temperature sensor, allows an optional bias, and rounds the offset to the valve's supported step. |
+| Valve temperature offset diagnostics | — | `valve_temperature_offset_diagnostics.yaml` | [Download](https://github.com/trandus/hass-blueprints/raw/main/blueprints/template/valve_temperature_calibration/valve_temperature_offset_diagnostics.yaml) | Optional template blueprint with the calibration, regulation and requested total offsets, plus valve temperatures. |
 
 ## 📦 HACS installation (repository)
 
@@ -128,7 +130,7 @@ The blueprint requires the following inputs:
 
 ## ℹ️ How it works
 
-Use this blueprint only with valves whose `current_temperature` is the built-in sensor reading before offset correction. It calculates an absolute offset; the current offset is used only to decide whether a write is needed:
+Enable **Reported temperature includes calibration** if the valve reports its current temperature after applying the offset. The controller then subtracts the current offset to estimate the raw reading. In calibration-only mode it calculates the new absolute offset:
 
 ```
 raw_offset = external_sensor_temperature - valve_temperature + manual_correction
@@ -141,3 +143,11 @@ Clamping happens after rounding, with no second rounding. For example, rounded v
 Temperature changes trigger an evaluation, and a [time pattern trigger](https://www.home-assistant.io/docs/automation/trigger/#time-pattern-trigger) checks every 30 seconds using current entity states. A write requires a difference greater than `0.000001` °C and at least `min_interval` seconds since that automation's previous changed-offset write attempt. These checks run before the actions, so an unchanged offset does not start or extend the interval. A failed write starts the interval because it is still a write attempt.
 
 With the automation enabled, valid data, and no action already running, a correction skipped during the interval is considered again on the first periodic check after the interval ends, even without another temperature change. Periodic checks also resume evaluations after automation reloads or recovery of unavailable entities. Each automation has its own interval, and [`mode: single`](https://www.home-assistant.io/docs/automation/modes/) prevents overlapping action runs within an instance.
+
+### Room regulation and diagnostics
+
+Room regulation is optional. Select a dedicated **Input Boolean** without an initial value to remember each room's heating demand. The controller reads the valve's setpoint, including manual changes, and adjusts only the offset. Its default room hysteresis starts demand at 0.5 °C below the setpoint and ends demand at the setpoint. The valve margin defaults to 2 °C and the device's offset bounds still apply. When room data is unavailable, or no corrected temperature arrives within two minutes after an offset change, room regulation releases the offset to the closest supported value to zero when it can.
+
+To publish diagnostics continuously, enable **Publish offset diagnostics** and select a dedicated **Input Datetime** with both date and time and no initial value. The timestamp helper records actual write attempts, including failures. The optional diagnostics blueprint receives the calculation and does not participate in control.
+
+Save the [diagnostics template blueprint](https://github.com/trandus/hass-blueprints/raw/main/blueprints/template/valve_temperature_calibration/valve_temperature_offset_diagnostics.yaml) under `blueprints/template/` and add a `use_blueprint` entry under `template:` for each room. Choose the same offset number entity in both blueprints. The inputs specify the sensor IDs for calibration, regulation, requested total, and raw, calibrated and target temperatures. Use your existing diagnostic IDs to preserve their histories. The calibration and regulation values add up to the requested total used for a write. An attribute on the total sensor holds the separate offset read from Home Assistant.
