@@ -6,12 +6,13 @@ blueprint:
     current setpoint is the room target, including changes made on the valve.
     This blueprint only writes the temperature offset and the optional helper.
 
-    Room regulation starts when the room is at or below target minus hysteresis
-    and stops at the target. Between those thresholds it preserves the last
-    demand. Use a dedicated Input Boolean without an initial state per room.
-    The offset shifts the valve's own reading past its heating or idle margin
-    where its range permits. The displayed valve temperature may differ from
-    the room temperature during regulation. Room regulation requires Celsius.
+    Room regulation starts at or below the setpoint minus the configured
+    start difference and stops at the setpoint. Between those thresholds it
+    keeps the previous demand.
+    Use a dedicated Input Boolean without an initial state per room.
+    The regulation correction moves the valve reading past its switching
+    margin where possible. Once heating stops, only calibration remains.
+    Room regulation requires Celsius.
 
     Optionally publish the calculation for the Valve Temperature Offset
     Diagnostics template blueprint. The regulator does not read its sensors.
@@ -135,8 +136,8 @@ blueprint:
           domain: input_boolean
 
     room_hysteresis:
-      name: Room heating hysteresis
-      description: Start heating this far below the valve setpoint. Stop at the setpoint.
+      name: Heating start difference below setpoint
+      description: Start at or below the setpoint minus this difference. Stop at or above the setpoint.
       default: 0.5
       selector:
         number:
@@ -203,6 +204,7 @@ variables:
   room_temperature: "{{ states(external_sensor) | float(none) }}"
   target_temperature: "{{ state_attr(climate_entity, 'temperature') | float(none) }}"
   climate_mode: "{{ states(climate_entity) }}"
+  hvac_action: "{{ state_attr(climate_entity, 'hvac_action') }}"
   offset_min: "{{ state_attr(offset_entity, 'min') | float(none) }}"
   offset_max: "{{ state_attr(offset_entity, 'max') | float(none) }}"
   offset_step: "{{ state_attr(offset_entity, 'step') | float(none) }}"
@@ -227,17 +229,20 @@ variables:
       {{ none }}
     {% endif %}
 
-  # The helper stores room demand independently of the valve's report and latency.
+  # The helper preserves room demand between the start threshold and the setpoint.
   regulating: "{{ heat_demand_helper != '' }}"
   demand_state: "{{ states(heat_demand_helper) if regulating else 'off' }}"
   was_demanding: "{{ demand_state == 'on' }}"
+  heat_threshold: >-
+    {{ (target_temperature - room_hysteresis) | round(6)
+       if regulating and is_number(target_temperature) else none }}
   celsius_readings: >-
     {{ state_attr(climate_entity, 'temperature_unit') == '°C'
        and state_attr(external_sensor, 'unit_of_measurement') == '°C'
        and state_attr(offset_entity, 'unit_of_measurement') == '°C' }}
   room_control_ready: >-
     {{ regulating and demand_state in ['on', 'off'] and climate_mode == 'heat'
-       and is_number(target_temperature) and is_number(room_temperature)
+       and is_number(heat_threshold) and is_number(room_temperature)
        and celsius_readings }}
   regulator_ready: "{{ room_control_ready and is_number(raw_temperature) }}"
   desired_demand: >-
@@ -245,7 +250,7 @@ variables:
       {{ false }}
     {% elif room_control_ready %}
       {{ room_temperature < target_temperature and
-         (was_demanding or room_temperature <= target_temperature - room_hysteresis) }}
+         (was_demanding or room_temperature <= heat_threshold) }}
     {% else %}
       {{ was_demanding }}
     {% endif %}
@@ -271,19 +276,24 @@ variables:
       {{ none }}
     {% endif %}
 
-  # Choose the hardware offset required for this phase. Directional rounding
-  # preserves the requested valve margin where the offset range permits it.
+  # Add a regulation correction only to request a valve transition or hold heating.
   phase_offset: >-
     {% if not (is_number(current_offset) and grid_ready) %}
       {{ none }}
+    {% elif regulating and regulator_ready and not desired_demand and hvac_action != 'heating' %}
+      {{ calibration_offset }}
     {% elif regulating %}
       {% if regulator_ready %}
-        {% set reading = [calibrated_room_temperature, target_temperature - valve_margin] | min
-                         if desired_demand
-                         else [calibrated_room_temperature, target_temperature + valve_margin] | max %}
-        {% set steps = (reading - raw_temperature - offset_min) / offset_step %}
-        {% set index = (steps + 0.000001) | round(0, 'floor') if desired_demand
-                       else (steps - 0.000001) | round(0, 'ceil') %}
+        {% set valve_limit = target_temperature + (-valve_margin if desired_demand else valve_margin) %}
+        {% set limit_index = (valve_limit - raw_temperature - offset_min) / offset_step %}
+        {% set calibration_index = (calibration_offset - offset_min) / offset_step %}
+        {% if desired_demand %}
+          {% set index = [calibration_index, (limit_index + 0.000001) | round(0, 'floor')] | min %}
+        {% else %}
+          {# Hold a stronger closing correction while the valve reports heating. #}
+          {% set applied_index = ((current_offset - offset_min) / offset_step) | round(0) %}
+          {% set index = [calibration_index, applied_index, (limit_index - 0.000001) | round(0, 'ceil')] | max %}
+        {% endif %}
       {% else %}
         {% set index = ((0 - offset_min) / offset_step) | round(0) %}
       {% endif %}
@@ -344,8 +354,9 @@ variables:
               calibrated_temperature=(raw_temperature + calibration_offset) | round(1)
                                      if is_number(calibration_offset) else none,
               target_temperature=target_temperature,
+              heat_threshold=heat_threshold,
               heat_demand=desired_demand,
-              hvac_action=state_attr(climate_entity, 'hvac_action')) }}
+              hvac_action=hvac_action) }}
     {% else %}
       {{ none }}
     {% endif %}

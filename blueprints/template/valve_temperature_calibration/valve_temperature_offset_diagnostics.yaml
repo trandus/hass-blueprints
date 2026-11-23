@@ -4,6 +4,8 @@ blueprint:
     Expose the readings published by one Valve Temperature Offset Calibration
     automation. Use the same offset number entity in both blueprints. Each
     output ID identifies a sensor created by this blueprint.
+    The target temperature sensor reports the heating stop temperature as its
+    state and the heating start temperature in its heat_threshold attribute.
   domain: template
   source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/template/valve_temperature_calibration/valve_temperature_offset_diagnostics.yaml
   homeassistant:
@@ -106,3 +108,5 @@ sensor:
     unit_of_measurement: °C
     state_class: measurement
     state: "{{ sample.get('target_temperature') }}"
+    attributes:
+      heat_threshold: "{{ sample.get('heat_threshold') }}"
