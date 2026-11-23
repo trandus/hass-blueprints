@@ -137,14 +137,23 @@ blueprint:
 
     room_hysteresis:
       name: Heating start difference below setpoint
-      description: Start at or below the setpoint minus this difference. Stop at or above the setpoint.
+      description: Start at or below the setpoint minus this difference. Also used if the optional helper is unavailable.
       default: 0.5
       selector:
         number:
-          min: 0.1
+          min: 0
           max: 2
           step: 0.1
           unit_of_measurement: °C
+
+    room_hysteresis_entity:
+      name: Heating start difference helper (optional)
+      description: Select one Input Number helper with a value from 0 to 1 °C.
+      default: []
+      selector:
+        entity:
+          domain: input_number
+          multiple: true
 
     valve_margin:
       name: Valve temperature margin
@@ -192,6 +201,7 @@ variables:
   offset_attempt_helper: !input offset_attempt_helper
   publish_offset_diagnostics: !input publish_offset_diagnostics
   room_hysteresis: !input room_hysteresis
+  room_hysteresis_entity: !input room_hysteresis_entity
   valve_margin: !input valve_margin
   min_interval: !input min_interval
   rounding_step: !input rounding_step
@@ -233,8 +243,12 @@ variables:
   regulating: "{{ heat_demand_helper != '' }}"
   demand_state: "{{ states(heat_demand_helper) if regulating else 'off' }}"
   was_demanding: "{{ demand_state == 'on' }}"
+  helper_hysteresis: >-
+    {{ states(room_hysteresis_entity[0]) | float(none) if room_hysteresis_entity else none }}
   heat_threshold: >-
-    {{ (target_temperature - room_hysteresis) | round(6)
+    {% set difference = helper_hysteresis
+         if is_number(helper_hysteresis) and 0 <= helper_hysteresis <= 1 else room_hysteresis %}
+    {{ (target_temperature - difference) | round(6)
        if regulating and is_number(target_temperature) else none }}
   celsius_readings: >-
     {{ state_attr(climate_entity, 'temperature_unit') == '°C'
@@ -367,6 +381,9 @@ trigger:
     to: null
   - platform: state
     entity_id: !input climate_entity
+  - platform: state
+    entity_id: !input room_hysteresis_entity
+    to: null
   - platform: homeassistant
     event: start
   - platform: time_pattern
