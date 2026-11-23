@@ -1,43 +1,19 @@
 blueprint:
   name: Valve Temperature Offset Calibration
   description: |
-    Automatically calibrate the temperature offset of a smart radiator valve (TRV)
-    using the readings from an external room temperature sensor.
-    Only use this blueprint with valves whose `current_temperature` reports the
-    temperature before offset correction. The calculation is:
-    room temperature - valve temperature + manual_correction.
-    The current offset is used only to check whether a write is needed.
-    The result is rounded to `rounding_step`, then clamped to the offset number
-    entity's min/max limits without rounding again. For limits of -2.5 to +2.5 °C,
-    rounded results of -3 and +3 °C become -2.5 and +2.5 °C.
-    Calibration is skipped when readings or limits are unavailable/invalid, the
-    entity step is invalid, or the result does not match that step.
+    Calibrate a radiator thermostat against a room sensor. Select a dedicated
+    heat demand helper to also regulate by room temperature. The thermostat's
+    current setpoint is the room target, including changes made on the valve.
+    This blueprint only writes the temperature offset and the optional helper.
 
-    Temperature changes and a periodic check every 30 seconds recalculate using
-    current readings. Each automation has its own `min_interval` between attempts
-    to write a changed offset, including failed attempts. A pending correction is
-    evaluated again on the first periodic check after the interval, also after
-    automation reloads or entity recovery. The automation must be enabled and idle.
-    Differences of at most 0.000001 °C are skipped before actions start and do not
-    restart the interval. Manual edits to the offset are temporary: the next
-    eligible recalculation can overwrite them. Use `manual_correction` for a bias.
+    Room regulation starts when the room is at or below target minus hysteresis
+    and stops at the target. Between those thresholds it preserves the last
+    demand. Use a dedicated Input Boolean without an initial state per room.
+    The offset shifts the valve's own reading past its heating or idle margin
+    where its range permits. The displayed valve temperature may differ from
+    the room temperature during regulation. Room regulation requires Celsius.
 
-    Example use case:
-      - `climate_entity`: climate.hama_valve_gerald_thermostat
-      - `external_sensor`: sensor.lumi_gerald_temperature
-      - `offset_number_entity`: number.hama_valve_gerald_local_temperature_offset_2
-      - `rounding_step`: 1.0
-
-    The supported offset range and rounding can limit how closely the corrected
-    valve temperature matches the external room sensor.
-
-    Manual correction:
-      Use the **manual_correction** slider to bias the calculated offset in cases where the valve
-      tends to stop heating too early or overheats even after calibration.
-
-      - Positive value (e.g., +0.3 °C): The valve will assume the room is warmer → it reduces heating sooner.
-      - Negative value (e.g., -0.3 °C): The valve will assume the room is cooler → it prolongs heating.
-
+    Without a helper, the blueprint only calibrates against the room sensor.
   domain: automation
   source_url: https://raw.githubusercontent.com/trandus/hass-blueprints/main/blueprints/automation/valve_temperature_calibration/valve_temperature_offset_calibration.yaml
 
@@ -83,14 +59,22 @@ blueprint:
           reorder: false
           multiple: false
 
-    min_interval:
-      name: Minimum time between updates
+    reported_temperature_includes_offset:
+      name: Reported temperature includes calibration
       description: |
-        Minimum time (in seconds) between attempts to write a changed offset for
-        this automation, including failed writes. At least this much time must pass.
-        Unchanged values and invalid readings do not restart the interval.
-        Skipped corrections are checked again every 30 seconds using current readings.
-        A typical value is 300 seconds (5 minutes).
+        Enable this when the valve applies its existing calibration before
+        reporting current_temperature. Leave it off when the valve reports
+        its raw sensor reading.
+      default: false
+      selector:
+        boolean:
+
+    min_interval:
+      name: Minimum time between adjustments in the same phase
+      description: |
+        Minimum seconds between offset attempts, including retries. When room
+        demand changes, the regulator can act after a 30-second settling period.
+        Pending updates are recalculated every 30 seconds.
       default: 300
       selector:
         number:
@@ -103,7 +87,8 @@ blueprint:
     rounding_step:
       name: Rounding step for offset value
       description: |
-        Define the step to which the calculated offset should be rounded.
+        Define the rounding step for calibration-only use. Room regulation
+        rounds to the offset entity's own step.
         Use `0.5` for half-degree rounding, or `1.0` for full degrees. Results must
         also match the offset entity's step. Min/max clamping happens after rounding.
       default: 1.0
@@ -122,7 +107,8 @@ blueprint:
         Use this if the valve still behaves undesirably after calibration:
         - **Positive value** (e.g., +0.1..+1.0 °C): Makes the valve think it's **warmer** → **reduces** heating sooner.
         - **Negative value** (e.g., -0.1..-1.0 °C): Makes the valve think it's **cooler** → **prolongs** heating.
-        Recommended start: 0.0 °C. Adjust in small steps (±0.1 °C), observe behavior for a few cycles.
+        Room regulation applies this bias to the baseline calibration. The demand
+        thresholds and the required valve margin stay unchanged.
       default: 0.0
       selector:
         number:
@@ -132,88 +118,167 @@ blueprint:
           mode: slider
           unit_of_measurement: °C
 
+
+    heat_demand_helper:
+      name: Room heat demand helper (optional)
+      description: |
+        Select a dedicated Input Boolean to enable room regulation. It saves
+        demand across reloads and restarts. Leave empty for calibration only.
+      default: ""
+      selector:
+        entity:
+          domain: input_boolean
+
+    room_hysteresis:
+      name: Room heating hysteresis
+      description: Start heating this far below the valve setpoint. Stop at the setpoint.
+      default: 0.5
+      selector:
+        number:
+          min: 0.1
+          max: 2
+          step: 0.1
+          unit_of_measurement: °C
+
+    valve_margin:
+      name: Valve temperature margin
+      description: |
+        Minimum temperature difference to request heating or idle from the valve.
+        Set this above the valve's own switching tolerance. For Hama Saswell, start
+        at 2 °C. The offset's min/max limits still apply.
+      default: 2.0
+      selector:
+        number:
+          min: 0.5
+          max: 5
+          step: 0.1
+          unit_of_measurement: °C
+
 mode: single
 max_exceeded: silent
 
 variables:
   climate_entity: !input climate_entity
   external_sensor: !input external_sensor
-  min_interval: !input min_interval
   offset_entity: !input offset_number_entity
+  heat_demand_helper: !input heat_demand_helper
+  room_hysteresis: !input room_hysteresis
+  valve_margin: !input valve_margin
+  min_interval: !input min_interval
   rounding_step: !input rounding_step
   manual_correction: !input manual_correction
+  reported_temperature_includes_offset: !input reported_temperature_includes_offset
 
-  current_offset: |
-    {{ states(offset_entity) | float(none) }}
-
-  current_temperature: |
-    {{ state_attr(climate_entity, 'current_temperature') | float(none) }}
-
-  external_temperature: |
-    {{ states(external_sensor) | float(none) }}
-
-  calculated_offset: |
-    {% set step = rounding_step | float(none) %}
-    {% set minimum = state_attr(offset_entity, 'min') | float(none) %}
-    {% set maximum = state_attr(offset_entity, 'max') | float(none) %}
-    {% if is_number(current_temperature) and is_number(external_temperature)
-          and is_number(manual_correction) and is_number(step) and step > 0
-          and is_number(minimum) and is_number(maximum) and minimum <= maximum %}
-      {% set raw = external_temperature - current_temperature + (manual_correction | float) %}
-      {% set rounded = ((raw / step) | round(0)) * step %}
-      {{ [minimum, [rounded, maximum] | min] | max }}
+  # Read the available inputs once for both the decision and its actions.
+  current_offset: "{{ states(offset_entity) | float(none) }}"
+  reported_temperature: "{{ state_attr(climate_entity, 'current_temperature') | float(none) }}"
+  room_temperature: "{{ states(external_sensor) | float(none) }}"
+  target_temperature: "{{ state_attr(climate_entity, 'temperature') | float(none) }}"
+  climate_mode: "{{ states(climate_entity) }}"
+  offset_min: "{{ state_attr(offset_entity, 'min') | float(none) }}"
+  offset_max: "{{ state_attr(offset_entity, 'max') | float(none) }}"
+  offset_step: "{{ state_attr(offset_entity, 'step') | float(none) }}"
+  raw_temperature: >-
+    {% if is_number(reported_temperature) and
+          (not reported_temperature_includes_offset or is_number(current_offset)) %}
+      {{ reported_temperature - (current_offset if reported_temperature_includes_offset else 0) }}
     {% else %}
       {{ none }}
     {% endif %}
 
+  # The helper stores room demand independently of the valve's report and latency.
+  regulating: "{{ heat_demand_helper != '' }}"
+  demand_state: "{{ states(heat_demand_helper) if regulating else 'off' }}"
+  was_demanding: "{{ demand_state == 'on' }}"
+  regulator_ready: >-
+    {{ regulating and demand_state in ['on', 'off'] and climate_mode == 'heat'
+       and is_number(target_temperature) and is_number(room_temperature)
+       and is_number(raw_temperature)
+       and state_attr(climate_entity, 'temperature_unit') == '°C'
+       and state_attr(external_sensor, 'unit_of_measurement') == '°C'
+       and state_attr(offset_entity, 'unit_of_measurement') == '°C' }}
+  desired_demand: >-
+    {% if climate_mode == 'off' %}
+      {{ false }}
+    {% elif regulator_ready %}
+      {{ room_temperature < target_temperature and
+         (was_demanding or room_temperature <= target_temperature - room_hysteresis) }}
+    {% else %}
+      {{ was_demanding }}
+    {% endif %}
+  phase_changed: "{{ desired_demand != was_demanding }}"
+
+  # Project the desired valve reading onto the legal offset values.
+  calculated_offset: >-
+    {% if not (is_number(current_offset) and is_number(offset_min) and
+              is_number(offset_max) and is_number(offset_step) and
+              offset_step > 0 and offset_max >= offset_min) %}
+      {{ none }}
+    {% elif regulating %}
+      {% if regulator_ready %}
+        {% set baseline = room_temperature + manual_correction %}
+        {% set reading = [baseline, target_temperature - valve_margin] | min if desired_demand
+                         else [baseline, target_temperature + valve_margin] | max %}
+        {% set steps = (reading - raw_temperature - offset_min) / offset_step %}
+        {% set index = (steps + 0.000001) | round(0, 'floor') if desired_demand
+                       else (steps - 0.000001) | round(0, 'ceil') %}
+      {% else %}
+        {% set index = ((0 - offset_min) / offset_step) | round(0) %}
+      {% endif %}
+      {% set last_index = (((offset_max - offset_min) / offset_step) + 0.000001) | round(0, 'floor') %}
+      {{ (offset_min + [0, [index, last_index] | min] | max * offset_step) | round(6) }}
+    {% elif has_value(climate_entity) and is_number(raw_temperature)
+            and is_number(room_temperature) and rounding_step > 0 %}
+      {% set value = ((room_temperature - raw_temperature + manual_correction) / rounding_step)
+                     | round(0) * rounding_step %}
+      {% set bounded = [offset_min, [value, offset_max] | min] | max %}
+      {% set steps = (bounded - offset_min) / offset_step %}
+      {{ bounded if (steps - (steps | round(0))) | abs < 0.000001 else none }}
+    {% else %}
+      {{ none }}
+    {% endif %}
+
+  # An offset report can precede the corrected temperature report from the valve.
+  # Wait through that window before reusing the pair for another calculation.
+  attempt_age: >-
+    {{ as_timestamp(now()) - as_timestamp(this.attributes.get('last_triggered'), 0) }}
+  offset_settled: >-
+    {{ not (regulating and reported_temperature_includes_offset and is_number(current_offset))
+       or as_timestamp(now()) - as_timestamp(states[offset_entity].last_changed, 0) >= 30 }}
+  update_demand: "{{ phase_changed and offset_settled and attempt_age >= 30 }}"
+  update_offset: >-
+    {{ is_number(calculated_offset) and (calculated_offset - current_offset) | abs > 0.000001
+       and offset_settled and attempt_age >= (30 if phase_changed else min_interval) }}
+
 trigger:
   - platform: state
     entity_id: !input external_sensor
+    to: null
   - platform: state
     entity_id: !input climate_entity
-    attribute: current_temperature
+  - platform: homeassistant
+    event: start
   - platform: time_pattern
     seconds: "/30"
 
 condition:
   - condition: template
-    value_template: "{{ offset_entity != '' }}"
-  - condition: template
-    value_template: |
-      {{ is_number(states(offset_entity))
-         and has_value(climate_entity)
-         and is_number(state_attr(climate_entity, 'current_temperature'))
-         and is_number(states(external_sensor)) }}
-  - condition: template
-    value_template: |
-      {{ is_number(state_attr(offset_entity, 'min'))
-         and is_number(state_attr(offset_entity, 'max'))
-         and is_number(state_attr(offset_entity, 'step'))
-         and (state_attr(offset_entity, 'min') | float) <= (state_attr(offset_entity, 'max') | float)
-         and (state_attr(offset_entity, 'step') | float(0)) > 0 }}
-  - condition: template
-    value_template: |
-      {% set value = calculated_offset | float(0) %}
-      {% set minimum = state_attr(offset_entity, 'min') | float(0) %}
-      {% set maximum = state_attr(offset_entity, 'max') | float(0) %}
-      {% set target_step = state_attr(offset_entity, 'step') | float(0) %}
-      {% set steps_from_minimum = (value - minimum) / target_step if target_step > 0 else -1 %}
-      {{ is_number(calculated_offset)
-         and target_step > 0
-         and minimum <= value <= maximum
-         and ((steps_from_minimum - (steps_from_minimum | round(0))) | abs) < 0.000001 }}
-  - condition: template
-    value_template: |
-      {{ is_number(calculated_offset) and is_number(current_offset)
-         and ((calculated_offset | float) - (current_offset | float)) | abs > 0.000001 }}
-  - condition: template
-    value_template: |
-      {% set last = state_attr(this.entity_id, 'last_triggered') %}
-      {{ last is none or (as_timestamp(now()) - as_timestamp(last, 0)) >= min_interval }}
+    value_template: "{{ update_demand or update_offset }}"
 
 action:
-  - service: number.set_value
-    target:
-      entity_id: "{{ offset_entity }}"
-    data:
-      value: "{{ calculated_offset }}"
+  - if:
+      - condition: template
+        value_template: "{{ update_demand }}"
+    then:
+      - service: "input_boolean.turn_{{ 'on' if desired_demand else 'off' }}"
+        target:
+          entity_id: "{{ heat_demand_helper }}"
+  - if:
+      - condition: template
+        value_template: "{{ update_offset }}"
+    then:
+      - service: number.set_value
+        target:
+          entity_id: "{{ offset_entity }}"
+        data:
+          value: "{{ calculated_offset }}"
